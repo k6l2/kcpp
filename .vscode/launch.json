@@ -9,7 +9,9 @@
 			"type": "cppvsdbg",
 			"request": "launch",
 			"program": "${workspaceRoot}/build/kc++.exe",
-			"args": [],
+			"args": ["${env:KML_HOME}\\code"
+				, "${env:KML_HOME}\\build\\code"
+				, "--verbose"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],

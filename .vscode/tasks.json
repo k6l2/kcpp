@@ -7,7 +7,7 @@
 			"label": "build debug"
 			, "type": "shell"
 			, "command": "build.bat"
-			, "args": [ ]
+			, "args": []
 			, "group": {"kind": "build", "isDefault": true}
 			, "presentation": { "reveal": "silent" }
 			, "problemMatcher": "$msCompile"
