@@ -7,6 +7,16 @@
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 static bool g_verbose;
+#if defined(_WIN32)
+#include <Windows.h>
+static void setFileReadOnly(const fs::path::value_type* fileName)
+{
+	if(!SetFileAttributesW(fileName, FILE_ATTRIBUTE_READONLY))
+	{
+		fprintf(stderr, "Failed to set read-only '%ws'!\n", fileName);
+	}
+}
+#endif// defined(_WIN32)
 static bool writeEntireFile(const fs::path::value_type* fileName, 
                             const char* nullTerminatedFileData)
 {
@@ -171,6 +181,7 @@ int main(int argc, char** argv)
 #endif
 			char*const fileData = 
 				readEntireFile(p.path().c_str(), fs::file_size(p.path()));
+			///TODO: process fileData here...
 			if(fileData)
 			{
 				if(!writeEntireFile(outPath.c_str(), fileData))
@@ -178,6 +189,7 @@ int main(int argc, char** argv)
 					fprintf(stderr, "Failed to write file '%ws'!\n", 
 					        outPath.c_str());
 				}
+				setFileReadOnly(outPath.c_str());
 				free(fileData);
 			}
 			else
