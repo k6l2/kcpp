@@ -24,6 +24,7 @@ enum class KTokenType : int8_t
 	WHITESPACE,
 	COMMENT,
 	STRING,
+	CHARACTER,
 	IDENTIFIER,
 	END_OF_STREAM,
 	UNKNOWN
@@ -71,15 +72,14 @@ static KToken ktokeParseComment(KTokenizer& tokenizer)
 {
 	KToken result = {
 		.type = KTokenType::COMMENT,
-		.textLength = 1,
+		.textLength = 0,
 		.text = tokenizer.at
 	};
 	if(tokenizer.at[0] == '/' && tokenizer.at[1] == '/')
 	{
 		tokenizer.at += 2;
 		result.textLength += 2;
-		while(tokenizer.at[0] && 
-			!(tokenizer.at[1] && isEndOfLine(tokenizer.at[1])))
+		while(tokenizer.at[0] && !isEndOfLine(tokenizer.at[0]))
 		{
 			tokenizer.at++;
 			result.textLength++;
@@ -192,6 +192,26 @@ static KToken ktokeNext(KTokenizer& tokenizer)
 				tokenizer.at++;
 			}
 		}break;
+		case '\'':
+		{
+			result.type = KTokenType::CHARACTER;
+			result.textLength = 0;
+			tokenizer.at++;
+			result.text = tokenizer.at;
+			while(tokenizer.at[0] && tokenizer.at[0] != '\'')
+			{
+				if(tokenizer.at[0] == '\\' && tokenizer.at[1])
+				{
+					tokenizer.at++; result.textLength++;
+				}
+				tokenizer.at++; result.textLength++;
+			}
+			// consume the final '\''
+			if(tokenizer.at[0] == '\'')
+			{
+				tokenizer.at++;
+			}
+		}break;
 		default:
 		{
 			if(isAlpha(tokenizer.at[0]))
@@ -298,6 +318,15 @@ static string processFileData(const char* fileData)
 	while(parsing)
 	{
 		KToken token = ktokeNext(tokenizer);
+#if 0
+		printf("%d:'%.*s'\n", token.type, token.textLength, token.text);
+		if( ktokeEquals(token, "stb_decompress") ||
+			ktokeEquals(token, "proggy_clean_ttf_compressed_data_base85"))
+		{
+			fflush(stdout);
+			printf("hello");
+		}
+#endif// 0
 		switch(token.type)
 		{
 			case KTokenType::HASH_TAG:
@@ -328,12 +357,14 @@ static string processFileData(const char* fileData)
 				result.append(token.text, token.textLength);
 				result.push_back('"');
 			}break;
+			case KTokenType::CHARACTER:
+			{
+				result.push_back('\'');
+				result.append(token.text, token.textLength);
+				result.push_back('\'');
+			}break;
 			default:
 			{
-#if 0
-				printf("%d:'%.*s'\n", token.type, token.textLength, token.text);
-				fflush(stdout);
-#endif// 0
 				result.append(token.text, token.textLength);
 			}break;
 			case KTokenType::END_OF_STREAM:
