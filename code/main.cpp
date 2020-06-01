@@ -1,14 +1,18 @@
+#include <cassert>
 #include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <vector>
-#include <cassert>
+using std::vector;
 #include <chrono>
 #include <string>
 using std::string;
+#include <sstream>
+using std::stringstream;
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 static bool g_verbose;
+static vector<string> g_kassets;
 enum class KTokenType : int8_t
 {
 	PAREN_OPEN,
@@ -274,8 +278,22 @@ static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 			kcppRequireToken(tokenizer, KTokenType::STRING);
 		if(tokenAssetString.type == KTokenType::STRING)
 		{
-			///TODO: add the asset string to our global project asset list
-			outString.append("1337");
+			const string strKasset(tokenAssetString.text, 
+			                       tokenAssetString.textLength);
+			auto itKasset = find(g_kassets.begin(), g_kassets.end(), strKasset);
+			size_t kAssetIndex = g_kassets.size();
+			if(itKasset == g_kassets.end())
+			{
+				g_kassets.push_back(strKasset);
+			}
+			else
+			{
+				kAssetIndex = itKasset - g_kassets.begin();
+			}
+			stringstream ss;
+			ss << "&g_kassets[" << kAssetIndex << "]";
+			outString.append(ss.str());
+			outString.insert(0, "#include \"gen_kassets.h\"\n");
 			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 		}
 		else
@@ -453,6 +471,20 @@ static char* readEntireFile(const fs::path::value_type* fileName,
 		return nullptr;
 	}
 }
+string generateHeaderKAssets()
+{
+	string result;
+	result.append("#pragma once\n");
+	result.append("static const char* g_kassets[] = {\n");
+	for(const string& kasset : g_kassets)
+	{
+		stringstream ss;
+		ss << "\t\"" << kasset<< "\",\n";
+		result.append(ss.str());
+	}
+	result.append("};\n");
+	return result;
+}
 static void printManual()
 {
 	printf("---KC++: An extremely lightweight language extension to C++ ---\n");
@@ -566,6 +598,17 @@ int main(int argc, char** argv)
 				        p.path().c_str());
 			}
 		}
+	}
+	// generate the kasset string database //
+	{
+		const fs::path outPath = desiredOutputDirectory / "gen_kassets.h";
+		const string fileData = generateHeaderKAssets();
+		if(!writeEntireFile(outPath.c_str(), fileData.c_str()))
+		{
+			fprintf(stderr, "Failed to write file '%ws'!\n", 
+					outPath.c_str());
+		}
+		setFileReadOnly(outPath.c_str());
 	}
 	// calculate the program execution time //
 	const auto timeMainEnd = chrono::high_resolution_clock::now();
