@@ -320,7 +320,7 @@ static void kcppParseKAssetIndex(KTokenizer& tokenizer, string& outString)
 			const string strKAssetCStr(tokenAssetString.text, 
 			                           tokenAssetString.textLength);
 			stringstream ss;
-			ss << "("<< strKAssetCStr << " - g_kassets)";
+			ss << "static_cast<u32>("<< strKAssetCStr << " - g_kassets)";
 			outString.append(ss.str());
 			///TODO: don't include this header if we've already included it in 
 			///      this file.
@@ -390,6 +390,13 @@ static void kcppParseKAssetTypeWav(KTokenizer& tokenizer, string& outString)
 static void kcppParseKAssetTypeOgg(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::OGG");
+	///TODO: don't include this header if we've already included it in 
+	///      this file.
+	outString.insert(0, "#include \"gen_kassets.h\"\n");
+}
+static void kcppParseKAssetTypeUnknown(KTokenizer& tokenizer, string& outString)
+{
+	outString.append("KAssetFileType::UNKNOWN");
 	///TODO: don't include this header if we've already included it in 
 	///      this file.
 	outString.insert(0, "#include \"gen_kassets.h\"\n");
@@ -475,6 +482,10 @@ static string processFileData(const char* fileData)
 				else if(ktokeEquals(token, "KASSET_TYPE_OGG"))
 				{
 					kcppParseKAssetTypeOgg(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE_UNKNOWN"))
+				{
+					kcppParseKAssetTypeUnknown(tokenizer, result);
 				}
 				else
 				{
