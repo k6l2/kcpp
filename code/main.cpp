@@ -293,6 +293,8 @@ static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 			stringstream ss;
 			ss << "&g_kassets[" << kAssetIndex << "]";
 			outString.append(ss.str());
+			///TODO: don't include this header if we've already included it in 
+			///      this file.
 			outString.insert(0, "#include \"gen_kassets.h\"\n");
 			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 		}
@@ -305,6 +307,92 @@ static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 	{
 		fprintf(stderr, "kcppParseKAsset failed!\n"); assert(false); 
 	}
+}
+static void kcppParseKAssetIndex(KTokenizer& tokenizer, string& outString)
+{
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
+		KTokenType::PAREN_OPEN)
+	{
+		KToken tokenAssetString = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenAssetString.type == KTokenType::IDENTIFIER)
+		{
+			const string strKAssetCStr(tokenAssetString.text, 
+			                           tokenAssetString.textLength);
+			stringstream ss;
+			ss << "("<< strKAssetCStr << " - g_kassets)";
+			outString.append(ss.str());
+			///TODO: don't include this header if we've already included it in 
+			///      this file.
+			outString.insert(0, "#include \"gen_kassets.h\"\n");
+			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
+		}
+		else
+		{
+			fprintf(stderr, "kcppParseKAsset failed 2!\n"); assert(false); 
+		}
+	}
+	else
+	{
+		fprintf(stderr, "kcppParseKAsset failed!\n"); assert(false); 
+	}
+}
+static void kcppParseKAssetType(KTokenizer& tokenizer, string& outString)
+{
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
+		KTokenType::PAREN_OPEN)
+	{
+		KToken tokenAssetString = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenAssetString.type == KTokenType::IDENTIFIER)
+		{
+			const string strKAssetCStr(tokenAssetString.text, 
+			                           tokenAssetString.textLength);
+			stringstream ss;
+			ss << "g_kassetFileTypes[("<< strKAssetCStr << " - g_kassets)]";
+			outString.append(ss.str());
+			///TODO: don't include this header if we've already included it in 
+			///      this file.
+			outString.insert(0, "#include \"gen_kassets.h\"\n");
+			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
+		}
+		else
+		{
+			fprintf(stderr, "kcppParseKAsset failed 2!\n"); assert(false); 
+		}
+	}
+	else
+	{
+		fprintf(stderr, "kcppParseKAsset failed!\n"); assert(false); 
+	}
+}
+static void kcppParseKAssetCount(KTokenizer& tokenizer, string& outString)
+{
+	outString.append("(sizeof(g_kassets)/sizeof(g_kassets[0]))");
+	///TODO: don't include this header if we've already included it in 
+	///      this file.
+	outString.insert(0, "#include \"gen_kassets.h\"\n");
+}
+static void kcppParseKAssetTypePng(KTokenizer& tokenizer, string& outString)
+{
+	outString.append("KAssetFileType::PNG");
+	///TODO: don't include this header if we've already included it in 
+	///      this file.
+	outString.insert(0, "#include \"gen_kassets.h\"\n");
+}
+static void kcppParseKAssetTypeWav(KTokenizer& tokenizer, string& outString)
+{
+	outString.append("KAssetFileType::WAV");
+	///TODO: don't include this header if we've already included it in 
+	///      this file.
+	outString.insert(0, "#include \"gen_kassets.h\"\n");
+}
+static void kcppParseKAssetTypeOgg(KTokenizer& tokenizer, string& outString)
+{
+	outString.append("KAssetFileType::OGG");
+	///TODO: don't include this header if we've already included it in 
+	///      this file.
+	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseMacroDefinition(KTokenizer& tokenizer, string& outString)
 {
@@ -363,6 +451,30 @@ static string processFileData(const char* fileData)
 				if(ktokeEquals(token, "KASSET"))
 				{
 					kcppParseKAsset(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_INDEX"))
+				{
+					kcppParseKAssetIndex(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE"))
+				{
+					kcppParseKAssetType(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_COUNT"))
+				{
+					kcppParseKAssetCount(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE_PNG"))
+				{
+					kcppParseKAssetTypePng(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE_WAV"))
+				{
+					kcppParseKAssetTypeWav(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE_OGG"))
+				{
+					kcppParseKAssetTypeOgg(tokenizer, result);
 				}
 				else
 				{
@@ -481,6 +593,33 @@ string generateHeaderKAssets()
 		stringstream ss;
 		ss << "\t\"" << kasset<< "\",\n";
 		result.append(ss.str());
+	}
+	result.append("};\n");
+	result.append("enum class KAssetFileType : unsigned char {\n");
+	result.append("\tPNG,\n");
+	result.append("\tWAV,\n");
+	result.append("\tOGG,\n");
+	result.append("\tUNKNOWN,\n");
+	result.append("};\n");
+	result.append("static const KAssetFileType g_kassetFileTypes[] = {\n");
+	for(const string& kasset : g_kassets)
+	{
+		if(kasset.find(".png", kasset.size() - 4) != string::npos)
+		{
+			result.append("\tKAssetFileType::PNG,\n");
+		}
+		else if(kasset.find(".wav", kasset.size() - 4) != string::npos)
+		{
+			result.append("\tKAssetFileType::WAV,\n");
+		}
+		else if(kasset.find(".ogg", kasset.size() - 4) != string::npos)
+		{
+			result.append("\tKAssetFileType::OGG,\n");
+		}
+		else
+		{
+			result.append("\tKAssetFileType::UNKNOWN,\n");
+		}
 	}
 	result.append("};\n");
 	return result;
