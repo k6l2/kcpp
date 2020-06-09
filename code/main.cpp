@@ -269,6 +269,19 @@ static KToken kcppRequireToken(KTokenizer& tokenizer, KTokenType tokenType)
 	} while(token.type != tokenType);
 	return token;
 }
+static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
+{
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
+		KTokenType::PAREN_OPEN)
+	{
+		outString.append("#include \"gen_kassets.h\"");
+		kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
+	}
+	else
+	{
+		fprintf(stderr, "kcppParseKAssetInclude failed!\n"); assert(false); 
+	}
+}
 static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 {
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
@@ -293,9 +306,6 @@ static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 			stringstream ss;
 			ss << "&g_kassets[" << kAssetIndex << "]";
 			outString.append(ss.str());
-			///TODO: don't include this header if we've already included it in 
-			///      this file.
-			outString.insert(0, "#include \"gen_kassets.h\"\n");
 			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 		}
 		else
@@ -322,9 +332,6 @@ static void kcppParseKAssetIndex(KTokenizer& tokenizer, string& outString)
 			stringstream ss;
 			ss << "static_cast<u32>("<< strKAssetCStr << " - g_kassets)";
 			outString.append(ss.str());
-			///TODO: don't include this header if we've already included it in 
-			///      this file.
-			outString.insert(0, "#include \"gen_kassets.h\"\n");
 			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 		}
 		else
@@ -351,9 +358,6 @@ static void kcppParseKAssetType(KTokenizer& tokenizer, string& outString)
 			stringstream ss;
 			ss << "g_kassetFileTypes[("<< strKAssetCStr << " - g_kassets)]";
 			outString.append(ss.str());
-			///TODO: don't include this header if we've already included it in 
-			///      this file.
-			outString.insert(0, "#include \"gen_kassets.h\"\n");
 			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 		}
 		else
@@ -369,37 +373,22 @@ static void kcppParseKAssetType(KTokenizer& tokenizer, string& outString)
 static void kcppParseKAssetCount(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("(sizeof(g_kassets)/sizeof(g_kassets[0]))");
-	///TODO: don't include this header if we've already included it in 
-	///      this file.
-	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseKAssetTypePng(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::PNG");
-	///TODO: don't include this header if we've already included it in 
-	///      this file.
-	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseKAssetTypeWav(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::WAV");
-	///TODO: don't include this header if we've already included it in 
-	///      this file.
-	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseKAssetTypeOgg(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::OGG");
-	///TODO: don't include this header if we've already included it in 
-	///      this file.
-	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseKAssetTypeUnknown(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::UNKNOWN");
-	///TODO: don't include this header if we've already included it in 
-	///      this file.
-	outString.insert(0, "#include \"gen_kassets.h\"\n");
 }
 static void kcppParseMacroDefinition(KTokenizer& tokenizer, string& outString)
 {
@@ -455,7 +444,11 @@ static string processFileData(const char* fileData)
 			}break;
 			case KTokenType::IDENTIFIER:
 			{
-				if(ktokeEquals(token, "KASSET"))
+				if(ktokeEquals(token, "INCLUDE_KASSET"))
+				{
+					kcppParseKAssetInclude(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET"))
 				{
 					kcppParseKAsset(tokenizer, result);
 				}
