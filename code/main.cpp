@@ -318,6 +318,32 @@ static void kcppParseKAsset(KTokenizer& tokenizer, string& outString)
 		fprintf(stderr, "kcppParseKAsset failed!\n"); assert(false); 
 	}
 }
+static void kcppParseKAssetSearch(KTokenizer& tokenizer, string& outString)
+{
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
+		KTokenType::PAREN_OPEN)
+	{
+		KToken tokenAssetFileNamePu8 = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenAssetFileNamePu8.type == KTokenType::IDENTIFIER)
+		{
+			const string strPu8(tokenAssetFileNamePu8.text, 
+			                    tokenAssetFileNamePu8.textLength);
+			stringstream ss;
+			ss << "findKAssetCStr(" << strPu8 << ")";
+			outString.append(ss.str());
+			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
+		}
+		else
+		{
+			fprintf(stderr, "kcppParseKAssetSearch failed 2!\n"); assert(false); 
+		}
+	}
+	else
+	{
+		fprintf(stderr, "kcppParseKAssetSearch failed!\n"); assert(false); 
+	}
+}
 static void kcppParseKAssetIndex(KTokenizer& tokenizer, string& outString)
 {
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
@@ -386,6 +412,11 @@ static void kcppParseKAssetTypeOgg(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::OGG");
 }
+static void kcppParseKAssetTypeFlipbookMeta(KTokenizer& tokenizer, 
+                                            string& outString)
+{
+	outString.append("KAssetFileType::FLIPBOOK_META");
+}
 static void kcppParseKAssetTypeUnknown(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::UNKNOWN");
@@ -452,6 +483,10 @@ static string processFileData(const char* fileData)
 				{
 					kcppParseKAsset(tokenizer, result);
 				}
+				else if(ktokeEquals(token, "KASSET_SEARCH"))
+				{
+					kcppParseKAssetSearch(tokenizer, result);
+				}
 				else if(ktokeEquals(token, "KASSET_INDEX"))
 				{
 					kcppParseKAssetIndex(tokenizer, result);
@@ -475,6 +510,10 @@ static string processFileData(const char* fileData)
 				else if(ktokeEquals(token, "KASSET_TYPE_OGG"))
 				{
 					kcppParseKAssetTypeOgg(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_TYPE_FLIPBOOK_META"))
+				{
+					kcppParseKAssetTypeFlipbookMeta(tokenizer, result);
 				}
 				else if(ktokeEquals(token, "KASSET_TYPE_UNKNOWN"))
 				{
@@ -592,17 +631,33 @@ string generateHeaderKAssets()
 	string result;
 	result.append("#pragma once\n");
 	result.append("static const char* g_kassets[] = {\n");
-	for(const string& kasset : g_kassets)
+	for(size_t a = 0; a < g_kassets.size(); a++)
 	{
+		const string& kasset = g_kassets[a];
 		stringstream ss;
 		ss << "\t\"" << kasset<< "\",\n";
 		result.append(ss.str());
+		const size_t fbmPostfixOffset = kasset.find(".fbm", kasset.size() - 4);
+		if(fbmPostfixOffset != string::npos)
+		{
+			// Implicitly infer that there must be a `png` file of the same file
+			//	name prefix in the same directory as the `fbm`! (for now...) //
+			const string impliedPngAssetFileName = 
+				kasset.substr(0, fbmPostfixOffset) + string(".png");
+			auto itImpliedPng = find(g_kassets.begin(), g_kassets.end(), 
+			                         impliedPngAssetFileName);
+			if(itImpliedPng == g_kassets.end())
+			{
+				g_kassets.push_back(impliedPngAssetFileName);
+			}
+		}
 	}
 	result.append("};\n");
 	result.append("enum class KAssetFileType : unsigned char {\n");
 	result.append("\tPNG,\n");
 	result.append("\tWAV,\n");
 	result.append("\tOGG,\n");
+	result.append("\tFLIPBOOK_META,\n");
 	result.append("\tUNKNOWN,\n");
 	result.append("};\n");
 	result.append("static const KAssetFileType g_kassetFileTypes[] = {\n");
@@ -620,12 +675,28 @@ string generateHeaderKAssets()
 		{
 			result.append("\tKAssetFileType::OGG,\n");
 		}
+		else if(kasset.find(".fbm", kasset.size() - 4) != string::npos)
+		{
+			result.append("\tKAssetFileType::FLIPBOOK_META,\n");
+		}
 		else
 		{
 			result.append("\tKAssetFileType::UNKNOWN,\n");
 		}
 	}
 	result.append("};\n");
+	result.append("static const char*const* findKAssetCStr(const char* str)\n");
+	result.append("{\n");
+	result.append("\tfor(size_t a = 0; \n"
+	              "\t    a < (sizeof(g_kassets)/sizeof(g_kassets[0])); a++)\n");
+	result.append("\t{\n");
+	result.append("\t\tif(strcmp(g_kassets[a], str) == 0)\n");
+	result.append("\t\t{\n");
+	result.append("\t\t\treturn &g_kassets[a];\n");
+	result.append("\t\t}\n");
+	result.append("\t}\n");
+	result.append("\treturn nullptr;\n");
+	result.append("}\n");
 	return result;
 }
 static void printManual()
