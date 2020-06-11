@@ -631,6 +631,10 @@ string generateHeaderKAssets()
 	string result;
 	result.append("#pragma once\n");
 	result.append("static const char* g_kassets[] = {\n");
+	if(g_kassets.empty())
+	{
+		result.append("\t\"NO_KASSETS_FOUND_IN_SOURCE!\"\n");
+	}
 	for(size_t a = 0; a < g_kassets.size(); a++)
 	{
 		const string& kasset = g_kassets[a];
@@ -661,6 +665,10 @@ string generateHeaderKAssets()
 	result.append("\tUNKNOWN,\n");
 	result.append("};\n");
 	result.append("static const KAssetFileType g_kassetFileTypes[] = {\n");
+	if(g_kassets.empty())
+	{
+		result.append("\tKAssetFileType::UNKNOWN\n");
+	}
 	for(const string& kasset : g_kassets)
 	{
 		if(kasset.find(".png", kasset.size() - 4) != string::npos)
