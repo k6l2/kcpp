@@ -43,7 +43,7 @@
 				"clear": false
 			},
 			"options": {
-				"cwd": "${env:KML_HOME}\\build"
+				"cwd": "${env:KML_HOME}\\game\\build"
 			},
 			"problemMatcher": []
 		}

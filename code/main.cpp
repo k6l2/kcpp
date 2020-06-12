@@ -274,7 +274,7 @@ static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
 		KTokenType::PAREN_OPEN)
 	{
-		outString.append("#include \"gen_kassets.h\"");
+		outString.append("#include \"../build/code/gen_kassets.h\"");
 		kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 	}
 	else
@@ -755,8 +755,14 @@ int main(int argc, char** argv)
 		printf("desiredOutputDirectory='%ws'\n", 
 		       desiredOutputDirectory.c_str());
 	}
+	const string tempInputCodeTreeFolderName = 
+		inputCodeTreeDirectory.filename().string() + "_backup";
+	const fs::path inputCodeTreeParentDirectory = inputCodeTreeDirectory/"..";
+	const fs::path backupInputCodeTreeDirectory = 
+		inputCodeTreeParentDirectory/tempInputCodeTreeFolderName;
+	fs::rename(inputCodeTreeDirectory, backupInputCodeTreeDirectory);
 	for(const fs::directory_entry& p : 
-		fs::recursive_directory_iterator(inputCodeTreeDirectory))
+		fs::recursive_directory_iterator(backupInputCodeTreeDirectory))
 	{
 		if(g_verbose)
 		{
@@ -776,11 +782,12 @@ int main(int argc, char** argv)
 				       p.path().filename().c_str());
 			}
 #endif
-			// Create a path to the file excluding `inputCodeTreeDirectory` //
+			// Create a path to the file excluding 
+			//	`backupInputCodeTreeDirectory` //
 			fs::path inCodeTreePath = p.path().filename();
 			{
 				fs::path currPath = p.path().parent_path();
-				while(currPath != inputCodeTreeDirectory)
+				while(currPath != backupInputCodeTreeDirectory)
 				{
 					inCodeTreePath = currPath.filename() / inCodeTreePath;
 					currPath = currPath.parent_path();
@@ -795,6 +802,10 @@ int main(int argc, char** argv)
 			// Create the corresponding file inside `desiredOutputDirectory` //
 			const fs::path outPath = desiredOutputDirectory / inCodeTreePath;
 			fs::create_directories(outPath.parent_path());
+			// Recreate the original source directory //
+			const fs::path outPathOriginal = 
+				inputCodeTreeDirectory / inCodeTreePath;
+			fs::create_directories(outPathOriginal.parent_path());
 #if 0
 			if(g_verbose)
 			{
@@ -813,6 +824,13 @@ int main(int argc, char** argv)
 					        outPath.c_str());
 				}
 				setFileReadOnly(outPath.c_str());
+				// Recreate the original file, with kc++ modifications applied //
+				if(!writeEntireFile(outPathOriginal.c_str(), 
+				                    processedFileData.c_str()))
+				{
+					fprintf(stderr, "Failed to write file '%ws'!\n", 
+					        outPathOriginal.c_str());
+				}
 			}
 			else
 			{
