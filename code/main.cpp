@@ -344,6 +344,32 @@ static void kcppParseKAssetSearch(KTokenizer& tokenizer, string& outString)
 		fprintf(stderr, "kcppParseKAssetSearch failed!\n"); assert(false); 
 	}
 }
+static void kcppParseKAssetCStr(KTokenizer& tokenizer, string& outString)
+{
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
+		KTokenType::PAREN_OPEN)
+	{
+		KToken tokenAssetIndex = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenAssetIndex.type == KTokenType::IDENTIFIER)
+		{
+			const string strSizeT(tokenAssetIndex.text, 
+			                      tokenAssetIndex.textLength);
+			stringstream ss;
+			ss << "g_kassets[" << strSizeT << "]";
+			outString.append(ss.str());
+			kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
+		}
+		else
+		{
+			fprintf(stderr, "kcppParseKAssetCStr failed 2!\n"); assert(false); 
+		}
+	}
+	else
+	{
+		fprintf(stderr, "kcppParseKAssetCStr failed!\n"); assert(false); 
+	}
+}
 static void kcppParseKAssetIndex(KTokenizer& tokenizer, string& outString)
 {
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
@@ -486,6 +512,10 @@ static string processFileData(const char* fileData)
 				else if(ktokeEquals(token, "KASSET_SEARCH"))
 				{
 					kcppParseKAssetSearch(tokenizer, result);
+				}
+				else if(ktokeEquals(token, "KASSET_CSTR"))
+				{
+					kcppParseKAssetCStr(tokenizer, result);
 				}
 				else if(ktokeEquals(token, "KASSET_INDEX"))
 				{
