@@ -274,7 +274,7 @@ static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
 		KTokenType::PAREN_OPEN)
 	{
-		outString.append("#include \"../build/code/gen_kassets.h\"");
+		outString.append("#include \"gen_kassets.h\"");
 		kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE);
 	}
 	else
@@ -711,7 +711,7 @@ static void printManual()
 {
 	printf("---KC++: An extremely lightweight language extension to C++ ---\n");
 	printf("Usage: kc++ input_code_tree_directory "
-	       "desired_output_directory [--verbose]\n");
+	       "[--verbose]\n");
 	printf("Result: Upon successful completion, all C++ code in the input \n"
 	       "\tcode tree directory is transformed and saved into the desired \n"
 	       "\toutput directory.\n");
@@ -725,7 +725,7 @@ static void printManual()
 int main(int argc, char** argv)
 {
 	const auto timeMainStart = chrono::high_resolution_clock::now();
-	if(argc < 3)
+	if(argc < 2)
 	{
 		fprintf(stderr, "ERROR: incorrect usage!\n");
 		printManual();
@@ -733,8 +733,7 @@ int main(int argc, char** argv)
 	}
 	g_verbose = false;
 	const fs::path inputCodeTreeDirectory = argv[1];
-	const fs::path desiredOutputDirectory = argv[2];
-	for(int a = 3; a < argc; a++)
+	for(int a = 2; a < argc; a++)
 	{
 		if(strcmp(argv[a], "--verbose") == 0)
 		{
@@ -752,8 +751,6 @@ int main(int argc, char** argv)
 	{
 		printf("inputCodeTreeDirectory='%ws'\n", 
 		       inputCodeTreeDirectory.c_str());
-		printf("desiredOutputDirectory='%ws'\n", 
-		       desiredOutputDirectory.c_str());
 	}
 	const string tempInputCodeTreeFolderName = 
 		inputCodeTreeDirectory.filename().string() + "_backup";
@@ -799,9 +796,6 @@ int main(int argc, char** argv)
 				printf("inCodeTreePath='%ws'\n", inCodeTreePath.c_str());
 			}
 #endif
-			// Create the corresponding file inside `desiredOutputDirectory` //
-			const fs::path outPath = desiredOutputDirectory / inCodeTreePath;
-			fs::create_directories(outPath.parent_path());
 			// Recreate the original source directory //
 			const fs::path outPathOriginal = 
 				inputCodeTreeDirectory / inCodeTreePath;
@@ -818,12 +812,6 @@ int main(int argc, char** argv)
 			{
 				const string processedFileData = processFileData(fileData);
 				free(fileData);
-				if(!writeEntireFile(outPath.c_str(), processedFileData.c_str()))
-				{
-					fprintf(stderr, "Failed to write file '%ws'!\n", 
-					        outPath.c_str());
-				}
-				setFileReadOnly(outPath.c_str());
 				// Recreate the original file, with kc++ modifications applied //
 				if(!writeEntireFile(outPathOriginal.c_str(), 
 				                    processedFileData.c_str()))
@@ -840,8 +828,9 @@ int main(int argc, char** argv)
 		}
 	}
 	// generate the kasset string database //
+	if(!g_kassets.empty())
 	{
-		const fs::path outPath = desiredOutputDirectory / "gen_kassets.h";
+		const fs::path outPath = inputCodeTreeDirectory / "gen_kassets.h";
 		const string fileData = generateHeaderKAssets();
 		if(!writeEntireFile(outPath.c_str(), fileData.c_str()))
 		{

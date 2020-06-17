@@ -19,7 +19,7 @@
 			"options": {
 				"cwd": "${workspaceFolder}"
 			}
-			,"dependsOn":["cleanup"]
+//			,"dependsOn":["cleanup"]
 		},
 		{
 			"label": "cleanup",

@@ -9,8 +9,9 @@
 			"type": "cppvsdbg",
 			"request": "launch",
 			"program": "${workspaceRoot}/build/kc++.exe",
-			"args": ["${env:KML_HOME}\\game\\code"
-				, "${env:KML_HOME}\\game\\build\\code"
+			"args": [
+				"${env:KML_HOME}\\code-kcpp-utilities"
+				//"${env:KML_HOME}\\game\\code"
 				, "--verbose"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
