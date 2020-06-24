@@ -580,6 +580,45 @@ static string processFileData(const char* fileData)
 }
 #if defined(_WIN32)
 #include <Windows.h>
+void cloneFileTimestamps(const std::filesystem::path& source, 
+                         const std::filesystem::path& dest)
+{
+	const HANDLE hFileSource = 
+		CreateFileW(source.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, 
+		            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	assert(hFileSource != INVALID_HANDLE_VALUE);
+	if(hFileSource == INVALID_HANDLE_VALUE)
+	{
+		fprintf(stderr, "Failed to open file '%ws'! getlasterror=%i\n", 
+		        source.c_str(), GetLastError());
+	}
+	const HANDLE hFileDest = 
+		CreateFileW(dest.c_str(), FILE_WRITE_ATTRIBUTES, 0, nullptr, 
+		            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	assert(hFileDest != INVALID_HANDLE_VALUE);
+	if(hFileDest == INVALID_HANDLE_VALUE)
+	{
+		fprintf(stderr, "Failed to open file '%ws'! getlasterror=%i\n", 
+		        dest.c_str(), GetLastError());
+	}
+	FILETIME fileTimeCreation;
+	FILETIME fileTimeLastAccess;
+	FILETIME fileTimeLastWrite;
+	if(!GetFileTime(hFileSource, &fileTimeCreation, &fileTimeLastAccess, 
+	                &fileTimeLastWrite))
+	{
+		fprintf(stderr, "Failed to get file timestamps for '%ws'! "
+		        "getlasterror=%i\n", source.c_str(), GetLastError());
+	}
+	if(!SetFileTime(hFileDest, &fileTimeCreation, &fileTimeLastAccess, 
+	                &fileTimeLastWrite))
+	{
+		fprintf(stderr, "Failed to set file timestamps for '%ws'! "
+		        "getlasterror=%i\n", dest.c_str(), GetLastError());
+	}
+	CloseHandle(hFileDest);
+	CloseHandle(hFileSource);
+}
 static void setFileReadOnly(const fs::path::value_type* fileName)
 {
 	if(!SetFileAttributesW(fileName, FILE_ATTRIBUTE_READONLY))
@@ -849,6 +888,7 @@ int main(int argc, char** argv)
 					fprintf(stderr, "Failed to write file '%ws'!\n", 
 					        outPathOriginal.c_str());
 				}
+				cloneFileTimestamps(p, outPathOriginal);
 			}
 			else
 			{
