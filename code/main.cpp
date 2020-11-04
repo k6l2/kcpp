@@ -802,7 +802,36 @@ static void printManual()
 	       "\t    string data of all KASSET macro invocations in an array.\n");
 #endif// 0
 }
-int main(int argc, char** argv)
+vector<string> 
+	split(char *phrase, string delimiter)
+{
+	/* source: https://stackoverflow.com/a/44495206/4526664 */
+	vector<string> list;
+	string s = string(phrase);
+	size_t pos = 0;
+	string token;
+	while ((pos = s.find(delimiter)) != string::npos) 
+	{
+		token = s.substr(0, pos);
+		list.push_back(token);
+		s.erase(0, pos + delimiter.length());
+	}
+	list.push_back(s);
+	return list;
+}
+vector<fs::path> 
+	vecStringToVecFsPath(const vector<string>& vecString)
+{
+	vector<fs::path> result;
+	result.reserve(vecString.size());
+	for(const string& s : vecString)
+	{
+		result.push_back(s);
+	}
+	return result;
+}
+int 
+	main(int argc, char** argv)
 {
 	const auto timeMainStart = chrono::high_resolution_clock::now();
 	if(argc < 2)
@@ -812,11 +841,9 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 	g_verbose = false;
-//	const fs::path inputCodeTreeDirectory = argv[1];
-	for(int a = 0; a < argc; a++)
-	{
-		printf("arg[%i]='%s'\n", a, argv[a]);
-	}
+	const vector<fs::path> vecFsPathInputs = 
+		vecStringToVecFsPath(split(argv[1], ";"));
+	const fs::path fsPathOutput = argv[2];
 	for(int a = 3; a < argc; a++)
 	{
 		if(strcmp(argv[a], "--verbose") == 0)
@@ -833,9 +860,12 @@ int main(int argc, char** argv)
 	}
 	if(g_verbose)
 	{
-//		printf("inputCodeTreeDirectories='%s'\n", argv[1]);
-//		printf("inputCodeTreeDirectory='%ws'\n", 
-//		       inputCodeTreeDirectory.c_str());
+		for(size_t i = 0; i < vecFsPathInputs.size(); i++)
+		{
+			const fs::path fsPathInput = vecFsPathInputs[i];
+			printf("input[%i]='%ws'\n", i, fsPathInput.c_str());
+		}
+		printf("output='%ws'\n", fsPathOutput.c_str());
 	}
 #if 0
 	const string tempInputCodeTreeFolderName = 
