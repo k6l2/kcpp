@@ -471,7 +471,7 @@ static void kcppParseMacroDefinition(KTokenizer& tokenizer, string& outString)
 	}
 	outString.append(macroDef, macroDefSize);
 }
-static string processFileData(const char* fileData)
+static void processFileData(const char* fileData)
 {
 	string result;
 	bool parsing = true;
@@ -580,10 +580,10 @@ static string processFileData(const char* fileData)
 			}break;
 		}
 	}
-	return result;
 }
 #if defined(_WIN32)
 #include <Windows.h>
+#if CLONE_FILE_TIMESTAMPS
 void cloneFileTimestamps(const std::filesystem::path& source, 
                          const std::filesystem::path& dest)
 {
@@ -631,6 +631,7 @@ static void setFileReadOnly(const fs::path::value_type* fileName)
 	}
 }
 #endif// defined(_WIN32)
+#endif// CLONE_FILE_TIMESTAMPS
 static bool writeEntireFile(const fs::path::value_type* fileName, 
                             const char* nullTerminatedFileData)
 {
@@ -860,12 +861,40 @@ int
 	}
 	if(g_verbose)
 	{
-		for(size_t i = 0; i < vecFsPathInputs.size(); i++)
+		for(int i = 0; i < vecFsPathInputs.size(); i++)
 		{
 			const fs::path fsPathInput = vecFsPathInputs[i];
 			printf("input[%i]='%ws'\n", i, fsPathInput.c_str());
 		}
 		printf("output='%ws'\n", fsPathOutput.c_str());
+	}
+	int result = EXIT_SUCCESS;
+	for(const fs::path& fsPathInput : vecFsPathInputs)
+	{
+		for(const fs::directory_entry& fsDirEnt : 
+			fs::recursive_directory_iterator(fsPathInput))
+		{
+			if(fsDirEnt.is_directory())
+				continue;
+			if(!fsDirEnt.is_regular_file())
+				continue;
+			if(g_verbose)
+				printf("kcpp('%ws')\n", fsDirEnt.path().c_str());
+			char*const fileData = 
+				readEntireFile(
+					fsDirEnt.path().c_str(), fs::file_size(fsDirEnt.path()));
+			if(fileData)
+			{
+				processFileData(fileData);
+				free(fileData);
+			}
+			else
+			{
+				fprintf(stderr, "Failed to read file '%ws'!\n", 
+				        fsDirEnt.path().c_str());
+				result = EXIT_FAILURE;
+			}
+		}
 	}
 #if 0
 	const string tempInputCodeTreeFolderName = 
@@ -964,6 +993,6 @@ int
 	const auto timeMainDuration = chrono::duration_cast<chrono::microseconds>(
 		timeMainEnd - timeMainStart);
 	const float secondsMainDuration = timeMainDuration.count() / 1000000.f;
-	printf("kc++ complete! Seconds elapsed=%f\n", secondsMainDuration);
-	return EXIT_SUCCESS;
+	printf("kcpp complete! Seconds elapsed=%f\n", secondsMainDuration);
+	return result;
 }
