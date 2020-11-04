@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set project_root=%~dp0
-set exe_name=kc++
+set exe_name=kcpp
 pushd %project_root%
 if not exist build (
 	mkdir build

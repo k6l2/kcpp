@@ -8,9 +8,11 @@
 			"name": "cl.exe - Build and debug active file",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceRoot}/build/kc++.exe",
-			"args": [
-				"${env:KML_HOME}\\code-kcpp-utilities"
+			"program": "${workspaceRoot}/build/kcpp.exe",
+			"args": 
+				[ "${env:KCPP_INCLUDE}"
+				, "${workspaceFolder}\\build\\code"
+//				"${env:KML_HOME}\\code-kcpp-utilities"
 				//"${env:KML_HOME}\\game\\code"
 				, "--verbose"],
 			"stopAtEntry": false,

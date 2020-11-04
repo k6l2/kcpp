@@ -784,9 +784,13 @@ string generateHeaderKAssets()
 #endif// KASSET_IMPLEMENTATION
 static void printManual()
 {
-	printf("---KC++: An extremely lightweight language extension to C++ ---\n");
-	printf("Usage: kc++ input_code_tree_directory "
+	printf("---KCpp: An extremely lightweight language extension to C++ ---\n");
+	printf("Usage: kcpp input_code_tree_directories generated_code_directory "
 	       "[--verbose]\n");
+	printf("@param input_code_tree_directories: A semicolon-separated list of "
+	       "directories containing C++ code which needs to be processed by "
+	       "metaprogramming routines.\n");
+#if 0
 	printf("Result: Upon successful completion, all C++ code in the input \n"
 	       "\tcode tree directory is transformed and saved into the desired \n"
 	       "\toutput directory.\n");
@@ -796,6 +800,7 @@ static void printManual()
 	printf("\t-Generate a file at the root of desired output directory \n"
 	       "\t    called `kasset_array.h`, which contains the accumulated \n"
 	       "\t    string data of all KASSET macro invocations in an array.\n");
+#endif// 0
 }
 int main(int argc, char** argv)
 {
@@ -807,8 +812,12 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 	g_verbose = false;
-	const fs::path inputCodeTreeDirectory = argv[1];
-	for(int a = 2; a < argc; a++)
+//	const fs::path inputCodeTreeDirectory = argv[1];
+	for(int a = 0; a < argc; a++)
+	{
+		printf("arg[%i]='%s'\n", a, argv[a]);
+	}
+	for(int a = 3; a < argc; a++)
 	{
 		if(strcmp(argv[a], "--verbose") == 0)
 		{
@@ -824,9 +833,11 @@ int main(int argc, char** argv)
 	}
 	if(g_verbose)
 	{
-		printf("inputCodeTreeDirectory='%ws'\n", 
-		       inputCodeTreeDirectory.c_str());
+//		printf("inputCodeTreeDirectories='%s'\n", argv[1]);
+//		printf("inputCodeTreeDirectory='%ws'\n", 
+//		       inputCodeTreeDirectory.c_str());
 	}
+#if 0
 	const string tempInputCodeTreeFolderName = 
 		inputCodeTreeDirectory.filename().string() + "_backup";
 	const fs::path inputCodeTreeParentDirectory = inputCodeTreeDirectory/"..";
@@ -834,7 +845,7 @@ int main(int argc, char** argv)
 		inputCodeTreeParentDirectory/tempInputCodeTreeFolderName;
 	fs::rename(inputCodeTreeDirectory, backupInputCodeTreeDirectory);
 	for(const fs::directory_entry& p : 
-		fs::recursive_directory_iterator(backupInputCodeTreeDirectory))
+		fs::recursive_directory_iterator(inputCodeTreeDirectory))
 	{
 		if(g_verbose)
 		{
@@ -917,6 +928,7 @@ int main(int argc, char** argv)
 		setFileReadOnly(outPath.c_str());
 	}
 #endif// KASSET_IMPLEMENTATION
+#endif// 0
 	// calculate the program execution time //
 	const auto timeMainEnd = chrono::high_resolution_clock::now();
 	const auto timeMainDuration = chrono::duration_cast<chrono::microseconds>(
