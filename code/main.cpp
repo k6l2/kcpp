@@ -269,6 +269,7 @@ static KToken kcppRequireToken(KTokenizer& tokenizer, KTokenType tokenType)
 	} while(token.type != tokenType);
 	return token;
 }
+#if KASSET_IMPLEMENTATION
 static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
 {
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type == 
@@ -447,6 +448,7 @@ static void kcppParseKAssetTypeUnknown(KTokenizer& tokenizer, string& outString)
 {
 	outString.append("KAssetFileType::UNKNOWN");
 }
+#endif// KASSET_IMPLEMENTATION
 static void kcppParseMacroDefinition(KTokenizer& tokenizer, string& outString)
 {
 	const char* macroDef = tokenizer.at;
@@ -501,6 +503,7 @@ static string processFileData(const char* fileData)
 			}break;
 			case KTokenType::IDENTIFIER:
 			{
+#if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
 				{
 					kcppParseKAssetInclude(tokenizer, result);
@@ -550,6 +553,7 @@ static string processFileData(const char* fileData)
 					kcppParseKAssetTypeUnknown(tokenizer, result);
 				}
 				else
+#endif// KASSET_IMPLEMENTATION
 				{
 					result.append(token.text, token.textLength);
 				}
@@ -695,6 +699,7 @@ static char* readEntireFile(const fs::path::value_type* fileName,
 		return nullptr;
 	}
 }
+#if KASSET_IMPLEMENTATION
 string generateHeaderKAssets()
 {
 	string result;
@@ -776,6 +781,7 @@ string generateHeaderKAssets()
 	result.append("}\n");
 	return result;
 }
+#endif// KASSET_IMPLEMENTATION
 static void printManual()
 {
 	printf("---KC++: An extremely lightweight language extension to C++ ---\n");
@@ -897,6 +903,7 @@ int main(int argc, char** argv)
 			}
 		}
 	}
+#if KASSET_IMPLEMENTATION
 	// generate the kasset string database //
 	if(!g_kassets.empty())
 	{
@@ -909,6 +916,7 @@ int main(int argc, char** argv)
 		}
 		setFileReadOnly(outPath.c_str());
 	}
+#endif// KASSET_IMPLEMENTATION
 	// calculate the program execution time //
 	const auto timeMainEnd = chrono::high_resolution_clock::now();
 	const auto timeMainDuration = chrono::duration_cast<chrono::microseconds>(

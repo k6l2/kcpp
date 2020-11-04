@@ -1,6 +1,5 @@
 @echo off
-set project_root_COPY=%project_root%
-set exe_name_COPY=%exe_name%
+setlocal
 set project_root=%~dp0
 set exe_name=kc++
 pushd %project_root%
@@ -38,5 +37,5 @@ rem pop from build
 popd
 rem pop from %project_root%
 popd
-set project_root=%project_root_COPY%
-set exe_name=%exe_name_COPY%
+endlocal
+exit /b 0
