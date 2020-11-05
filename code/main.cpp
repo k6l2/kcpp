@@ -269,6 +269,11 @@ static KToken kcppRequireToken(KTokenizer& tokenizer, KTokenType tokenType)
 	} while(token.type != tokenType);
 	return token;
 }
+static void 
+	kcppParsePolymorphicTaggedUnion(KTokenizer& tokenizer)
+{
+	printf("KGT_POLYMORPHIC_TAGGED_UNION detected!\n");
+}
 #if KASSET_IMPLEMENTATION
 static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
 {
@@ -473,7 +478,7 @@ static void kcppParseMacroDefinition(KTokenizer& tokenizer, string& outString)
 }
 static void processFileData(const char* fileData)
 {
-	string result;
+	//string result;
 	bool parsing = true;
 	KTokenizer tokenizer = {.at = fileData };
 	while(parsing)
@@ -493,16 +498,21 @@ static void processFileData(const char* fileData)
 			case KTokenType::HASH_TAG:
 			{
 				KToken tokenNext = ktokeNext(tokenizer);
-				result.append(token.text, token.textLength);
-				result.append(tokenNext.text, tokenNext.textLength);
+//				result.append(token.text, token.textLength);
+//				result.append(tokenNext.text, tokenNext.textLength);
 				if(tokenNext.type == KTokenType::IDENTIFIER &&
 					ktokeEquals(tokenNext, "define"))
 				{
-					kcppParseMacroDefinition(tokenizer, result);
+					string macroDefinition;
+					kcppParseMacroDefinition(tokenizer, macroDefinition);
 				}
 			}break;
 			case KTokenType::IDENTIFIER:
 			{
+				if(ktokeEquals(token, "KGT_POLYMORPHIC_TAGGED_UNION"))
+				{
+					kcppParsePolymorphicTaggedUnion(tokenizer);
+				}
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
 				{
@@ -555,24 +565,24 @@ static void processFileData(const char* fileData)
 				else
 #endif// KASSET_IMPLEMENTATION
 				{
-					result.append(token.text, token.textLength);
+//					result.append(token.text, token.textLength);
 				}
 			}break;
 			case KTokenType::STRING:
 			{
-				result.push_back('"');
-				result.append(token.text, token.textLength);
-				result.push_back('"');
+//				result.push_back('"');
+//				result.append(token.text, token.textLength);
+//				result.push_back('"');
 			}break;
 			case KTokenType::CHARACTER:
 			{
-				result.push_back('\'');
-				result.append(token.text, token.textLength);
-				result.push_back('\'');
+//				result.push_back('\'');
+//				result.append(token.text, token.textLength);
+//				result.push_back('\'');
 			}break;
 			default:
 			{
-				result.append(token.text, token.textLength);
+//				result.append(token.text, token.textLength);
 			}break;
 			case KTokenType::END_OF_STREAM:
 			{
