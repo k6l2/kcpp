@@ -4,6 +4,8 @@
 		"xstring": "cpp",
 		"vector": "cpp",
 		"codecvt": "cpp",
-		"xlocale": "cpp"
+		"xlocale": "cpp",
+		"atomic": "cpp",
+		"cstdint": "cpp"
 	}
 }
