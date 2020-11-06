@@ -269,10 +269,45 @@ static KToken kcppRequireToken(KTokenizer& tokenizer, KTokenType tokenType)
 	} while(token.type != tokenType);
 	return token;
 }
+#define PARSE_FAILURE() \
+	{ fprintf(stderr, "parse failure!\n");\
+	  assert(false);\
+	  exit(-1);\
+	  return; }
 static void 
 	kcppParsePolymorphicTaggedUnion(KTokenizer& tokenizer)
 {
-	printf("KGT_POLYMORPHIC_TAGGED_UNION detected!\n");
+	/* parse the parenthesis */
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type != 
+			KTokenType::PAREN_OPEN)
+		PARSE_FAILURE();
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE).type != 
+			KTokenType::PAREN_CLOSE)
+		PARSE_FAILURE();
+	/* parse the `struct` keyword */
+	{
+		const KToken tokenStruct = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStruct.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		const string tokenStr = 
+			string(tokenStruct.text, tokenStruct.textLength);
+		if(tokenStr != "struct")
+			PARSE_FAILURE();
+	}
+	/* parse the struct identifier.  Using this string, we can start building a 
+		list of structures which derive from this one.  We can also create a 
+		file which must be included to add the union of derived structures to 
+		this struct.  */
+	{
+		const KToken tokenStructId = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStructId.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		const string tokenStr = 
+			string(tokenStructId.text, tokenStructId.textLength);
+		printf("KGT_POLYMORPHIC_TAGGED_UNION: '%s'\n", tokenStr.c_str());
+	}
 }
 #if KASSET_IMPLEMENTATION
 static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
