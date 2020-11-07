@@ -11,13 +11,16 @@ using std::string;
 using std::stringstream;
 #include <set>
 using std::set;
+#include <map>
+using std::map;
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 static bool g_verbose;
 #if KASSET_IMPLEMENTATION
 static vector<string> g_kassets;
 #endif// KASSET_IMPLEMENTATION
-static set<string> g_polyTaggedUnions;
+/* taggedUnionStructIdentifier => listOfDerivedStructIdentifiers */
+static map<string, set<string>> g_polyTaggedUnions;
 #include "tokenizer.cpp"
 #define PARSE_FAILURE() \
 	{ fprintf(stderr, "parse failure!\n");\
@@ -56,7 +59,59 @@ static void
 			PARSE_FAILURE();
 		const string tokenStr = 
 			string(tokenStructId.text, tokenStructId.textLength);
-		g_polyTaggedUnions.insert(tokenStr);
+		g_polyTaggedUnions.insert({tokenStr, {}});
+	}
+}
+static void 
+	kcppParsePolymorphicTaggedUnionExtension(KTokenizer& tokenizer)
+{
+	/* parse the parenthesis */
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type != 
+			KTokenType::PAREN_OPEN)
+		PARSE_FAILURE();
+	/* parse the tagged union struct identifier */
+	string parentStructId;
+	{
+		const KToken tokenStructId = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStructId.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		parentStructId = string(tokenStructId.text, tokenStructId.textLength);
+	}
+	/* parse the closing parenthesis */
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE).type != 
+			KTokenType::PAREN_CLOSE)
+		PARSE_FAILURE();
+	/* parse the `struct` keyword */
+	{
+		const KToken tokenStruct = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStruct.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		const string tokenStr = 
+			string(tokenStruct.text, tokenStruct.textLength);
+		if(tokenStr != "struct")
+			PARSE_FAILURE();
+	}
+	/* parse the struct identifier */
+	{
+		const KToken tokenStructId = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStructId.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		const string tokenStr = 
+			string(tokenStructId.text, tokenStructId.textLength);
+		/* now we can add this to the accumulated tagged union struct 
+			relationships */
+		auto ptuIt = g_polyTaggedUnions.find(parentStructId);
+		if(ptuIt == g_polyTaggedUnions.end())
+		{
+			g_polyTaggedUnions.insert({parentStructId, {}});
+			ptuIt = g_polyTaggedUnions.find(parentStructId);
+		}
+		if(ptuIt->second.contains(tokenStr))
+			PARSE_FAILURE();
+		ptuIt->second.insert(tokenStr);
 	}
 }
 #if KASSET_IMPLEMENTATION
@@ -297,6 +352,10 @@ static void processFileData(const char* fileData)
 				if(ktokeEquals(token, "KGT_POLYMORPHIC_TAGGED_UNION"))
 				{
 					kcppParsePolymorphicTaggedUnion(tokenizer);
+				}
+				if(ktokeEquals(token, "KGT_POLYMORPHIC_TAGGED_UNION_EXTENDS"))
+				{
+					kcppParsePolymorphicTaggedUnionExtension(tokenizer);
 				}
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
@@ -627,12 +686,25 @@ vector<fs::path>
 	return result;
 }
 static string 
-	generatePolymorphicTaggedUnion(const string& ptuIdentifier)
+	generatePolymorphicTaggedUnion(
+		const string& ptuIdentifier, 
+		const set<string>& ptuDerivedStructIdentifiers)
 {
 	string result;
 	result.append("union\n");
 	result.append("{\n");
-	result.append("	void* no_derived_structs;\n");
+	if(ptuDerivedStructIdentifiers.empty())
+		result.append("	void* no_derived_structs;\n");
+	else
+		for(const string& ptuDerivedId : ptuDerivedStructIdentifiers)
+		{
+			string ptuDerivedIdTitleCase = ptuDerivedId;
+			string ptuDerivedIdCamelCase = ptuDerivedId;
+			ptuDerivedIdTitleCase[0] = toupper(ptuDerivedId[0]);
+			ptuDerivedIdCamelCase[0] = tolower(ptuDerivedId[0]);
+			result.append("	" + ptuDerivedIdTitleCase + " " + 
+			              ptuDerivedIdCamelCase + ";\n");
+		}
 	result.append("};\n");
 	return result;
 }
@@ -705,11 +777,12 @@ int
 	}
 	/* output generated code into the provided output directory */
 	fs::create_directories(fsPathOutput);
-	for(const string& ptuIdentifier : g_polyTaggedUnions)
+	for(const auto& ptu : g_polyTaggedUnions)
 	{
-		const string ptuGenFileName = "gen_" + ptuIdentifier + ".h";
+		const string ptuGenFileName = "gen_ptu_" + ptu.first + ".h";
 		const fs::path outPath = fsPathOutput / ptuGenFileName;
-		const string fileData = generatePolymorphicTaggedUnion(ptuIdentifier);
+		const string fileData = 
+			generatePolymorphicTaggedUnion(ptu.first, ptu.second);
 		if(!writeEntireFile(outPath.c_str(), fileData.c_str()))
 		{
 			fprintf(stderr, "Failed to write file '%ws'!\n", 
