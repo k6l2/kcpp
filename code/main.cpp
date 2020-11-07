@@ -686,6 +686,21 @@ vector<fs::path>
 	return result;
 }
 static string 
+	generatePolymorphicTaggedUnionIncludes(
+		const string& ptuIdentifier, 
+		const set<string>& ptuDerivedStructIdentifiers)
+{
+	string result;
+	result.append("#pragma once\n");
+	for(const string& ptuDerivedId : ptuDerivedStructIdentifiers)
+	{
+		string ptuDerivedIdCamelCase = ptuDerivedId;
+		ptuDerivedIdCamelCase[0] = tolower(ptuDerivedId[0]);
+		result.append("#include \"" + ptuDerivedIdCamelCase + ".h\"");
+	}
+	return result;
+}
+static string 
 	generatePolymorphicTaggedUnion(
 		const string& ptuIdentifier, 
 		const set<string>& ptuDerivedStructIdentifiers)
@@ -779,6 +794,20 @@ int
 	fs::create_directories(fsPathOutput);
 	for(const auto& ptu : g_polyTaggedUnions)
 	{
+		{
+			const string ptuGenFileNameIncludes = 
+				"gen_ptu_" + ptu.first + "_includes.h";
+			const fs::path outPathIncludes = 
+				fsPathOutput / ptuGenFileNameIncludes;
+			const string fileData = 
+				generatePolymorphicTaggedUnionIncludes(ptu.first, ptu.second);
+			if(!writeEntireFile(outPathIncludes.c_str(), fileData.c_str()))
+			{
+				fprintf(stderr, "Failed to write file '%ws'!\n", 
+						outPathIncludes.c_str());
+				result = EXIT_FAILURE;
+			}
+		}
 		const string ptuGenFileName = "gen_ptu_" + ptu.first + ".h";
 		const fs::path outPath = fsPathOutput / ptuGenFileName;
 		const string fileData = 
