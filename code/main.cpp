@@ -19,8 +19,21 @@ static bool g_verbose;
 #if KASSET_IMPLEMENTATION
 static vector<string> g_kassets;
 #endif// KASSET_IMPLEMENTATION
-/* taggedUnionStructIdentifier => listOfDerivedStructIdentifiers */
-static map<string, set<string>> g_polyTaggedUnions;
+using PolymorphicTaggedUnionPureVirtualFunctionIdentifier = string;
+struct PolymorphicTaggedUnionPureVirtualFunctionMetaData
+{
+	vector<string> qualifierTokens;
+	vector<string> paramTokens;
+};
+struct PolymorphicTaggedUnionMetaData
+{
+	set<string> derivedStructIdentifierSet;
+	map<PolymorphicTaggedUnionPureVirtualFunctionIdentifier, 
+	    PolymorphicTaggedUnionPureVirtualFunctionMetaData> virtualFunctions;
+};
+using TaggedUnionStructIdentifier = string;
+static map<TaggedUnionStructIdentifier, PolymorphicTaggedUnionMetaData> 
+	g_polyTaggedUnions;
 #include "tokenizer.cpp"
 #define PARSE_FAILURE() \
 	{ fprintf(stderr, "parse failure!\n");\
@@ -30,13 +43,6 @@ static map<string, set<string>> g_polyTaggedUnions;
 static void 
 	kcppParsePolymorphicTaggedUnion(KTokenizer& tokenizer)
 {
-	/* parse the parenthesis */
-	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type != 
-			KTokenType::PAREN_OPEN)
-		PARSE_FAILURE();
-	if(kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE).type != 
-			KTokenType::PAREN_CLOSE)
-		PARSE_FAILURE();
 	/* parse the `struct` keyword */
 	{
 		const KToken tokenStruct = 
@@ -109,10 +115,73 @@ static void
 			g_polyTaggedUnions.insert({parentStructId, {}});
 			ptuIt = g_polyTaggedUnions.find(parentStructId);
 		}
-		if(ptuIt->second.contains(tokenStr))
+		if(ptuIt->second.derivedStructIdentifierSet.contains(tokenStr))
 			PARSE_FAILURE();
-		ptuIt->second.insert(tokenStr);
+		ptuIt->second.derivedStructIdentifierSet.insert(tokenStr);
 	}
+}
+static void 
+	kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(
+		KTokenizer& tokenizer)
+{
+	/* continue parsing identifier tokens until we reach an open parenthesis,
+		storing the function identifier strings as we go */
+	string functionIdentifier;
+	vector<string> functionQualifiers;
+	KTokenType lastFunctionQualifierTokenType;
+	for(;;)
+	{
+		const KToken token = ktokeNext(tokenizer);
+		if(token.type == KTokenType::PAREN_OPEN)
+		/* once we reach an open paren, we know the last identifier was the 
+			function name */
+		{
+			assert(lastFunctionQualifierTokenType == KTokenType::IDENTIFIER);
+			functionIdentifier = functionQualifiers.back();
+			functionQualifiers.pop_back();
+			break;
+		}
+		functionQualifiers.push_back(string(token.text, token.textLength));
+		lastFunctionQualifierTokenType = token.type;
+	}
+	/* continue parsing tokens until we reach a close paren, storing all the 
+		tokens as we go */
+	string ownerPtuIdentifier;
+	vector<string> functionParamTokens;
+	for(;;)
+	{
+		const KToken token = ktokeNext(tokenizer);
+		if(token.type == KTokenType::PAREN_CLOSE)
+		{
+			break;
+		}
+		functionParamTokens.push_back(string(token.text, token.textLength));
+		/* the first identifier is required to be the struct identifier of the 
+			PTU which owns this function */
+		if(functionParamTokens.size() == 1)
+		{
+			assert(token.type == KTokenType::IDENTIFIER);
+			ownerPtuIdentifier = functionParamTokens.back();
+		}
+	}
+	/* save this pure virtual function declaration inside g_polyTaggedUnions so 
+		we can generate dispatch code to automatically call functions which 
+		override this */
+	auto ptuIt = g_polyTaggedUnions.find(ownerPtuIdentifier);
+	if(ptuIt == g_polyTaggedUnions.end())
+	{
+		g_polyTaggedUnions.insert({ownerPtuIdentifier, {}});
+		ptuIt = g_polyTaggedUnions.find(ownerPtuIdentifier);
+	}
+	/* ensure that there is only ONE virtual function with this identifier 
+		declared for this polymorphic tagged union! */
+	auto pvfIt = ptuIt->second.virtualFunctions.find(functionIdentifier);
+	assert(pvfIt == ptuIt->second.virtualFunctions.end());
+	/* finally, we can add the extracted function declaration to the virtual 
+		function set of this PTU */
+	ptuIt->second.virtualFunctions[functionIdentifier] = 
+		{ .qualifierTokens = functionQualifiers
+		, .paramTokens     = functionParamTokens };
 }
 #if KASSET_IMPLEMENTATION
 static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
@@ -349,13 +418,18 @@ static void processFileData(const char* fileData)
 			}break;
 			case KTokenType::IDENTIFIER:
 			{
-				if(ktokeEquals(token, "KGT_POLYMORPHIC_TAGGED_UNION"))
+				if(ktokeEquals(token, "KCPP_POLYMORPHIC_TAGGED_UNION"))
 				{
 					kcppParsePolymorphicTaggedUnion(tokenizer);
 				}
-				if(ktokeEquals(token, "KGT_POLYMORPHIC_TAGGED_UNION_EXTENDS"))
+				if(ktokeEquals(token, "KCPP_POLYMORPHIC_TAGGED_UNION_EXTENDS"))
 				{
 					kcppParsePolymorphicTaggedUnionExtension(tokenizer);
+				}
+				if(ktokeEquals(
+					token, "KCPP_POLYMORPHIC_TAGGED_UNION_PURE_VIRTUAL"))
+				{
+					kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(tokenizer);
 				}
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
@@ -688,11 +762,11 @@ vector<fs::path>
 static string 
 	generatePolymorphicTaggedUnionIncludes(
 		const string& ptuIdentifier, 
-		const set<string>& ptuDerivedStructIdentifiers)
+		const PolymorphicTaggedUnionMetaData& ptuMeta)
 {
 	string result;
 	result.append("#pragma once\n");
-	for(const string& ptuDerivedId : ptuDerivedStructIdentifiers)
+	for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
 	{
 		string ptuDerivedIdCamelCase = ptuDerivedId;
 		ptuDerivedIdCamelCase[0] = tolower(ptuDerivedId[0]);
@@ -701,17 +775,38 @@ static string
 	return result;
 }
 static string 
+	toUpperCase(string str)
+{
+	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+	return str;
+}
+static string 
 	generatePolymorphicTaggedUnion(
 		const string& ptuIdentifier, 
-		const set<string>& ptuDerivedStructIdentifiers)
+		const PolymorphicTaggedUnionMetaData& ptuMeta)
 {
 	string result;
+	/* generate a type enumeration for the tagged union */
+	result.append("enum class Type : u16\n");
+	result.append("	{ ");
+	bool firstEnum = true;
+	for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+	{
+		if(!firstEnum)
+			result.append("\n	, ");
+		firstEnum = false;
+		result.append(toUpperCase(ptuDerivedId));
+	}
+	if(!ptuMeta.derivedStructIdentifierSet.empty())
+		result.append("\n	, ");
+	result.append("ENUM_COUNT };\n");
+	/* generate the union of derived structs */
 	result.append("union\n");
 	result.append("{\n");
-	if(ptuDerivedStructIdentifiers.empty())
+	if(ptuMeta.derivedStructIdentifierSet.empty())
 		result.append("	void* no_derived_structs;\n");
 	else
-		for(const string& ptuDerivedId : ptuDerivedStructIdentifiers)
+		for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
 		{
 			string ptuDerivedIdTitleCase = ptuDerivedId;
 			string ptuDerivedIdCamelCase = ptuDerivedId;
@@ -794,6 +889,13 @@ int
 	fs::create_directories(fsPathOutput);
 	for(const auto& ptu : g_polyTaggedUnions)
 	{
+		/* generate the code file which defines all pure virtual function 
+			dispatchers declared for this PTU struct */
+		{
+			assert(!"TODO");
+		}
+		/* generate the code file which includes all the source files which 
+			define the structures which make up the union within the PTU */
 		{
 			const string ptuGenFileNameIncludes = 
 				"gen_ptu_" + ptu.first + "_includes.h";
@@ -808,15 +910,19 @@ int
 				result = EXIT_FAILURE;
 			}
 		}
-		const string ptuGenFileName = "gen_ptu_" + ptu.first + ".h";
-		const fs::path outPath = fsPathOutput / ptuGenFileName;
-		const string fileData = 
-			generatePolymorphicTaggedUnion(ptu.first, ptu.second);
-		if(!writeEntireFile(outPath.c_str(), fileData.c_str()))
+		/* generate the code file which declares the anonomous union of the 
+			PTU */
 		{
-			fprintf(stderr, "Failed to write file '%ws'!\n", 
-					outPath.c_str());
-			result = EXIT_FAILURE;
+			const string ptuGenFileName = "gen_ptu_" + ptu.first + ".h";
+			const fs::path outPath = fsPathOutput / ptuGenFileName;
+			const string fileData = 
+				generatePolymorphicTaggedUnion(ptu.first, ptu.second);
+			if(!writeEntireFile(outPath.c_str(), fileData.c_str()))
+			{
+				fprintf(stderr, "Failed to write file '%ws'!\n", 
+						outPath.c_str());
+				result = EXIT_FAILURE;
+			}
 		}
 	}
 #if 0

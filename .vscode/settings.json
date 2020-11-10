@@ -6,6 +6,13 @@
 		"codecvt": "cpp",
 		"xlocale": "cpp",
 		"atomic": "cpp",
-		"cstdint": "cpp"
+		"cstdint": "cpp",
+		"xhash": "cpp",
+		"xtree": "cpp",
+		"deque": "cpp",
+		"list": "cpp",
+		"map": "cpp",
+		"set": "cpp",
+		"unordered_map": "cpp"
 	}
 }
