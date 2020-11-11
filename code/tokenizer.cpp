@@ -1,24 +1,23 @@
 #include <cstdint>
 enum class KTokenType : int8_t
-{
-	PAREN_OPEN,
-	PAREN_CLOSE,
-	COLON,
-	SEMICOLON,
-	ASTERISK,
-	BRACKET_OPEN,
-	BRACKET_CLOSE,
-	BRACE_OPEN,
-	BRACE_CLOSE,
-	HASH_TAG,
-	WHITESPACE,
-	COMMENT,
-	STRING,
-	CHARACTER,
-	IDENTIFIER,
-	END_OF_STREAM,
-	UNKNOWN
-};
+	{ PAREN_OPEN
+	, PAREN_CLOSE
+	, COLON
+	, COMMA
+	, SEMICOLON
+	, ASTERISK
+	, BRACKET_OPEN
+	, BRACKET_CLOSE
+	, BRACE_OPEN
+	, BRACE_CLOSE
+	, HASH_TAG
+	, WHITESPACE
+	, COMMENT
+	, STRING
+	, CHARACTER
+	, IDENTIFIER
+	, END_OF_STREAM
+	, UNKNOWN };
 struct KToken
 {
 	KTokenType type;
@@ -145,6 +144,7 @@ static KToken ktokeNext(KTokenizer& tokenizer)
 		case '(':  result.type = KTokenType::PAREN_OPEN;    tokenizer.at++; break;
 		case ')':  result.type = KTokenType::PAREN_CLOSE;   tokenizer.at++; break;
 		case ':':  result.type = KTokenType::COLON;         tokenizer.at++; break;
+		case ',':  result.type = KTokenType::COMMA;         tokenizer.at++; break;
 		case ';':  result.type = KTokenType::SEMICOLON;     tokenizer.at++; break;
 		case '*':  result.type = KTokenType::ASTERISK;      tokenizer.at++; break;
 		case '[':  result.type = KTokenType::BRACKET_OPEN;  tokenizer.at++; break;

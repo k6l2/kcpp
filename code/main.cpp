@@ -15,6 +15,7 @@ using std::set;
 using std::map;
 namespace chrono = std::chrono;
 namespace fs = std::filesystem;
+#include "tokenizer.cpp"
 static bool g_verbose;
 #if KASSET_IMPLEMENTATION
 static vector<string> g_kassets;
@@ -39,7 +40,6 @@ struct PolymorphicTaggedUnionMetaData
 using TaggedUnionStructIdentifier = string;
 static map<TaggedUnionStructIdentifier, PolymorphicTaggedUnionMetaData> 
 	g_polyTaggedUnions;
-#include "tokenizer.cpp"
 #define PARSE_FAILURE() \
 	{ fprintf(stderr, "parse failure!\n");\
 	  assert(false);\
@@ -124,6 +124,12 @@ static void
 			PARSE_FAILURE();
 		ptuIt->second.derivedStructIdentifierSet.insert(tokenStr);
 	}
+}
+static void 
+	kcppParsePolymorphicTaggedUnionPureVirtualFunctionOverride(
+		KTokenizer& tokenizer)
+{
+	//assert(!"TODO");
 }
 static void 
 	kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(
@@ -445,6 +451,12 @@ static void processFileData(const char* fileData)
 					token, "KCPP_POLYMORPHIC_TAGGED_UNION_PURE_VIRTUAL"))
 				{
 					kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(tokenizer);
+				}
+				if(ktokeEquals(
+					token, 
+					"KCPP_POLYMORPHIC_TAGGED_UNION_PURE_VIRTUAL_OVERRIDE"))
+				{
+					kcppParsePolymorphicTaggedUnionPureVirtualFunctionOverride(tokenizer);
 				}
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
@@ -780,6 +792,8 @@ static string
 	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 	return str;
 }
+/* extract the string of the identifier of the FIRST parameter of the PTU 
+	VFMD - this is a required parameter that must be the type of the PTU */
 static string 
 	ptuPvfGetThisParamIdentifier(
 		const PolymorphicTaggedUnionPureVirtualFunctionMetaData& pvfMeta)
@@ -792,14 +806,18 @@ static string
 	for(size_t i = 0; i < pvfMeta.paramTokens.size(); i++)
 	{
 		const StringToken& token = pvfMeta.paramTokens[i];
-		if(token.type == KTokenType::WHITESPACE)
+		if(token.type == KTokenType::COMMA)
+		{
+			assert(lastNonWhitespaceToken != "UNKNOWN");
+			return lastNonWhitespaceToken;
+		}
+		if(token.type != KTokenType::WHITESPACE)
 		{
 			lastNonWhitespaceToken = token.str;
 			continue;
 		}
-		if(token.type == KTokenType::COMMA)
-			return lastNonWhitespaceToken;
 	}
+	assert(lastNonWhitespaceToken != "UNKNOWN");
 	return lastNonWhitespaceToken;
 }
 static string 
