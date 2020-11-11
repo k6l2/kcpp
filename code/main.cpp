@@ -19,12 +19,17 @@ static bool g_verbose;
 #if KASSET_IMPLEMENTATION
 static vector<string> g_kassets;
 #endif// KASSET_IMPLEMENTATION
-using PolymorphicTaggedUnionPureVirtualFunctionIdentifier = string;
+struct StringToken
+{
+	KTokenType type;
+	string str;
+};
 struct PolymorphicTaggedUnionPureVirtualFunctionMetaData
 {
-	vector<string> qualifierTokens;
-	vector<string> paramTokens;
+	vector<StringToken> qualifierTokens;
+	vector<StringToken> paramTokens;
 };
+using PolymorphicTaggedUnionPureVirtualFunctionIdentifier = string;
 struct PolymorphicTaggedUnionMetaData
 {
 	set<string> derivedStructIdentifierSet;
@@ -127,7 +132,7 @@ static void
 	/* continue parsing identifier tokens until we reach an open parenthesis,
 		storing the function identifier strings as we go */
 	string functionIdentifier;
-	vector<string> functionQualifiers;
+	vector<StringToken> functionQualifiers;
 	KTokenType lastFunctionQualifierTokenType;
 	for(;;)
 	{
@@ -137,17 +142,22 @@ static void
 			function name */
 		{
 			assert(lastFunctionQualifierTokenType == KTokenType::IDENTIFIER);
-			functionIdentifier = functionQualifiers.back();
+			functionIdentifier = functionQualifiers.back().str;
 			functionQualifiers.pop_back();
 			break;
 		}
-		functionQualifiers.push_back(string(token.text, token.textLength));
+		//if(token.type != KTokenType::WHITESPACE)
+		{
+			functionQualifiers.push_back(
+				{ .type = token.type
+				, .str  = string(token.text, token.textLength)});
+		}
 		lastFunctionQualifierTokenType = token.type;
 	}
 	/* continue parsing tokens until we reach a close paren, storing all the 
 		tokens as we go */
 	string ownerPtuIdentifier;
-	vector<string> functionParamTokens;
+	vector<StringToken> functionParamTokens;
 	for(;;)
 	{
 		const KToken token = ktokeNext(tokenizer);
@@ -155,13 +165,18 @@ static void
 		{
 			break;
 		}
-		functionParamTokens.push_back(string(token.text, token.textLength));
+		//if(token.type != KTokenType::WHITESPACE)
+		{
+			functionParamTokens.push_back(
+				{ .type = token.type
+				, .str  = string(token.text, token.textLength)});
+		}
 		/* the first identifier is required to be the struct identifier of the 
 			PTU which owns this function */
 		if(functionParamTokens.size() == 1)
 		{
 			assert(token.type == KTokenType::IDENTIFIER);
-			ownerPtuIdentifier = functionParamTokens.back();
+			ownerPtuIdentifier = functionParamTokens.back().str;
 		}
 	}
 	/* save this pure virtual function declaration inside g_polyTaggedUnions so 
@@ -760,6 +775,71 @@ vector<fs::path>
 	return result;
 }
 static string 
+	toUpperCase(string str)
+{
+	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+	return str;
+}
+static string 
+	ptuPvfGetThisParamIdentifier(
+		const PolymorphicTaggedUnionPureVirtualFunctionMetaData& pvfMeta)
+{
+	/* cases: 
+		- no params (ILLEGAL??)
+		- only one param
+		- multiple params */
+	string lastNonWhitespaceToken = "UNKNOWN";
+	for(size_t i = 0; i < pvfMeta.paramTokens.size(); i++)
+	{
+		const StringToken& token = pvfMeta.paramTokens[i];
+		if(token.type == KTokenType::WHITESPACE)
+		{
+			lastNonWhitespaceToken = token.str;
+			continue;
+		}
+		if(token.type == KTokenType::COMMA)
+			return lastNonWhitespaceToken;
+	}
+	return lastNonWhitespaceToken;
+}
+static string 
+	generatePolymorphicTaggedUnionDispatch(
+		const string& ptuIdentifier, 
+		const PolymorphicTaggedUnionMetaData& ptuMeta)
+{
+	string result;
+	/* iterate over each pure virtual function and construct a function 
+		definition which switches on the generated Type of the first parameter 
+		and calls any overridden versions */
+	for(auto vfIt : ptuMeta.virtualFunctions)
+	{
+		for(const StringToken& sTokeQualifier : vfIt.second.qualifierTokens)
+		{
+			result.append(sTokeQualifier.str);
+		}
+		result.append(vfIt.first);
+		result.append("(\n\t\t");
+		for(const StringToken& sTokeParam : vfIt.second.paramTokens)
+		{
+			result.append(sTokeParam.str);
+		}
+		result.append(")\n");
+		result.append("{\n");
+		const string thisParamId = ptuPvfGetThisParamIdentifier(vfIt.second);
+		result.append("\tswitch("+thisParamId+"->type)\n");
+		result.append("\t{\n");
+		for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+		{
+			result.append("\tcase "+ptuIdentifier+"::Type::"+
+			              toUpperCase(ptuDerivedId)+":\n");
+			result.append("\tbreak;\n");
+		}
+		result.append("\t}\n");
+		result.append("}\n");
+	}
+	return result;
+}
+static string 
 	generatePolymorphicTaggedUnionIncludes(
 		const string& ptuIdentifier, 
 		const PolymorphicTaggedUnionMetaData& ptuMeta)
@@ -773,12 +853,6 @@ static string
 		result.append("#include \"" + ptuDerivedIdCamelCase + ".h\"");
 	}
 	return result;
-}
-static string 
-	toUpperCase(string str)
-{
-	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
-	return str;
 }
 static string 
 	generatePolymorphicTaggedUnion(
@@ -799,7 +873,8 @@ static string
 	}
 	if(!ptuMeta.derivedStructIdentifierSet.empty())
 		result.append("\n	, ");
-	result.append("ENUM_COUNT };\n");
+	/* declare a member variable of the struct with this type enum! */
+	result.append("ENUM_COUNT } type;\n");
 	/* generate the union of derived structs */
 	result.append("union\n");
 	result.append("{\n");
@@ -892,7 +967,18 @@ int
 		/* generate the code file which defines all pure virtual function 
 			dispatchers declared for this PTU struct */
 		{
-			assert(!"TODO");
+			const string ptuGenFileNameDispatch = 
+				"gen_ptu_" + ptu.first + "_dispatch.cpp";
+			const fs::path outPathDispatch = 
+				fsPathOutput / ptuGenFileNameDispatch;
+			const string fileData = 
+				generatePolymorphicTaggedUnionDispatch(ptu.first, ptu.second);
+			if(!writeEntireFile(outPathDispatch.c_str(), fileData.c_str()))
+			{
+				fprintf(stderr, "Failed to write file '%ws'!\n", 
+						outPathDispatch.c_str());
+				result = EXIT_FAILURE;
+			}
 		}
 		/* generate the code file which includes all the source files which 
 			define the structures which make up the union within the PTU */
