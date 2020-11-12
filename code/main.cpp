@@ -28,7 +28,12 @@ struct StringToken
 struct PolymorphicTaggedUnionPureVirtualFunctionMetaData
 {
 	vector<StringToken> qualifierTokens;
-	vector<StringToken> paramTokens;
+	struct Parameter
+	{
+		string identifier;
+		vector<StringToken> qualifierTokens;
+	};
+	vector<Parameter> params;
 };
 using PolymorphicTaggedUnionPureVirtualFunctionIdentifier = string;
 struct PolymorphicTaggedUnionMetaData
@@ -129,7 +134,57 @@ static void
 	kcppParsePolymorphicTaggedUnionPureVirtualFunctionOverride(
 		KTokenizer& tokenizer)
 {
-	//assert(!"TODO");
+	/* read the derived struct name from the macro */
+	/* parse the parenthesis */
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_OPEN).type != 
+			KTokenType::PAREN_OPEN)
+		PARSE_FAILURE();
+	/* parse the derived struct identifier */
+	string derivedStructId;
+	{
+		const KToken tokenStructId = 
+			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
+		if(tokenStructId.type != KTokenType::IDENTIFIER)
+			PARSE_FAILURE();
+		derivedStructId = string(tokenStructId.text, tokenStructId.textLength);
+	}
+	/* parse the closing parenthesis */
+	if(kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE).type != 
+			KTokenType::PAREN_CLOSE)
+		PARSE_FAILURE();
+	/* read all function qualifiers (all identifiers before the open paren, 
+		except for the last one because that's the function name) */
+	string functionIdentifier;
+	vector<StringToken> functionQualifiers;
+	KTokenType lastFunctionQualifierTokenType;
+	for(;;)
+	{
+		const KToken token = ktokeNext(tokenizer);
+		if(token.type == KTokenType::PAREN_OPEN)
+		/* once we reach an open paren, we know the last identifier was the 
+			function name */
+		{
+			assert(lastFunctionQualifierTokenType == KTokenType::IDENTIFIER);
+			functionIdentifier = functionQualifiers.back().str;
+			functionQualifiers.pop_back();
+			break;
+		}
+		//if(token.type != KTokenType::WHITESPACE)
+		{
+			functionQualifiers.push_back(
+				{ .type = token.type
+				, .str  = string(token.text, token.textLength)});
+		}
+		lastFunctionQualifierTokenType = token.type;
+	}
+	/* read all the parameter qualifiers for each param (all non-whitespace 
+		tokens between each comma token) */
+	/* store all these tokens as a single data structure in some data set inside 
+		g_polyTaggedUnions */
+	/* then later, when we're generating the dispatch code, we compare all these 
+		tokens with the ones in the declared virtual functions and see if they 
+		match! */
+	assert(!"TODO");
 }
 static void 
 	kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(
@@ -163,7 +218,8 @@ static void
 	/* continue parsing tokens until we reach a close paren, storing all the 
 		tokens as we go */
 	string ownerPtuIdentifier;
-	vector<StringToken> functionParamTokens;
+	vector<PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter> 
+		functionParams;
 	for(;;)
 	{
 		const KToken token = ktokeNext(tokenizer);
@@ -202,7 +258,7 @@ static void
 		function set of this PTU */
 	ptuIt->second.virtualFunctions[functionIdentifier] = 
 		{ .qualifierTokens = functionQualifiers
-		, .paramTokens     = functionParamTokens };
+		, .params          = functionParams };
 }
 #if KASSET_IMPLEMENTATION
 static void kcppParseKAssetInclude(KTokenizer& tokenizer, string& outString)
