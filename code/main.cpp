@@ -220,27 +220,62 @@ static void
 	string ownerPtuIdentifier;
 	vector<PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter> 
 		functionParams;
+	PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter currParam;
 	for(;;)
 	{
 		const KToken token = ktokeNext(tokenizer);
-		if(token.type == KTokenType::PAREN_CLOSE)
+		/* accumulate tokens into `currParam` until we hit a COMMA or 
+			PAREN_CLOSE, in which case we can add the current `currParam` into 
+			the function param list, then start accumulating a new param */
+		if(token.type == KTokenType::PAREN_CLOSE 
+			|| token.type == KTokenType::COMMA)
 		{
-			break;
+			/* before adding the `currParam`, we should eliminate all leading & 
+				trailing WHITESPACE tokens */
+			for(size_t t = 0; t < currParam.qualifierTokens.size(); t++)
+			{
+				if(currParam.qualifierTokens[t].type != KTokenType::WHITESPACE)
+					break;
+				currParam.qualifierTokens.erase(
+					currParam.qualifierTokens.begin() + t);
+				t--;
+			}
+			for(size_t t = currParam.qualifierTokens.size() - 1; 
+				t < currParam.qualifierTokens.size(); t--)
+			{
+				if(currParam.qualifierTokens[t].type != KTokenType::WHITESPACE)
+					break;
+				currParam.qualifierTokens.erase(
+					currParam.qualifierTokens.begin() + t);
+				t++;
+			}
+			/* the parameter's last token is the identifier */
+			currParam.identifier = currParam.qualifierTokens.back().str;
+			/* if there are no non-whitespace tokens, there is no parameter! */
+			if(!currParam.qualifierTokens.empty())
+				functionParams.push_back(currParam);
+			currParam = {};// clear the currParam var for the next parameter
+			if(token.type == KTokenType::PAREN_CLOSE)
+				break;
 		}
-		//if(token.type != KTokenType::WHITESPACE)
+		/* don't add more than one whitespace token in a row, since duplicate 
+			whitespace has no logical meaning */
+		if(!(token.type == KTokenType::WHITESPACE 
+			&& !currParam.qualifierTokens.empty() 
+			&& currParam.qualifierTokens.back().type == KTokenType::WHITESPACE)
+			/* also, don't add the comma token to params! */
+			&& token.type != KTokenType::COMMA)
 		{
-			functionParamTokens.push_back(
+			currParam.qualifierTokens.push_back(
 				{ .type = token.type
 				, .str  = string(token.text, token.textLength)});
 		}
-		/* the first identifier is required to be the struct identifier of the 
-			PTU which owns this function */
-		if(functionParamTokens.size() == 1)
-		{
-			assert(token.type == KTokenType::IDENTIFIER);
-			ownerPtuIdentifier = functionParamTokens.back().str;
-		}
 	}
+	/* functions are REQUIRED to have a pointer to the PTU struct as the first 
+		parameter! (this pointer) */
+	assert(!functionParams.empty());
+	ownerPtuIdentifier = functionParams.front().qualifierTokens.front().str;
+	assert(!ownerPtuIdentifier.empty());
 	/* save this pure virtual function declaration inside g_polyTaggedUnions so 
 		we can generate dispatch code to automatically call functions which 
 		override this */
@@ -508,12 +543,14 @@ static void processFileData(const char* fileData)
 				{
 					kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(tokenizer);
 				}
+#if 0
 				if(ktokeEquals(
 					token, 
 					"KCPP_POLYMORPHIC_TAGGED_UNION_PURE_VIRTUAL_OVERRIDE"))
 				{
 					kcppParsePolymorphicTaggedUnionPureVirtualFunctionOverride(tokenizer);
 				}
+#endif
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
 				{
@@ -848,6 +885,7 @@ static string
 	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 	return str;
 }
+#if 0
 /* extract the string of the identifier of the FIRST parameter of the PTU 
 	VFMD - this is a required parameter that must be the type of the PTU */
 static string 
@@ -876,6 +914,7 @@ static string
 	assert(lastNonWhitespaceToken != "UNKNOWN");
 	return lastNonWhitespaceToken;
 }
+#endif
 static string 
 	generatePolymorphicTaggedUnionDispatch(
 		const string& ptuIdentifier, 
@@ -893,13 +932,19 @@ static string
 		}
 		result.append(vfIt.first);
 		result.append("(\n\t\t");
-		for(const StringToken& sTokeParam : vfIt.second.paramTokens)
+		for(size_t p = 0; p < vfIt.second.params.size(); p++)
 		{
-			result.append(sTokeParam.str);
+			const PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter& 
+				param = vfIt.second.params[p];
+			if(p > 0)
+				result.append(", ");
+			for(const StringToken& st : param.qualifierTokens)
+				result.append(st.str);
 		}
 		result.append(")\n");
 		result.append("{\n");
-		const string thisParamId = ptuPvfGetThisParamIdentifier(vfIt.second);
+		assert(!vfIt.second.params.empty());
+		const string thisParamId = vfIt.second.params.front().identifier;
 		result.append("\tswitch("+thisParamId+"->type)\n");
 		result.append("\t{\n");
 		for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
