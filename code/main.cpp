@@ -17,6 +17,7 @@ namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 #include "tokenizer.cpp"
 static bool g_verbose;
+static string g_lastPtuExtensionStructId = "---UNKNOWN---";
 #if KASSET_IMPLEMENTATION
 static vector<string> g_kassets;
 #endif// KASSET_IMPLEMENTATION
@@ -30,17 +31,28 @@ struct PolymorphicTaggedUnionPureVirtualFunctionMetaData
 	vector<StringToken> qualifierTokens;
 	struct Parameter
 	{
+		/* @TODO: delete this since it is implicitly the last qualifierToken, 
+			and the code which uses this data structure does NOT store preceding 
+			& trailing whitespace tokens!*/
 		string identifier;
 		vector<StringToken> qualifierTokens;
 	};
 	vector<Parameter> params;
 };
+struct PolymorphicTaggedUnionPureVirtualFunctionOverrideMetaData
+{
+	string superFunctionIdentifier;
+	PolymorphicTaggedUnionPureVirtualFunctionMetaData functionMetaData;
+};
 using PolymorphicTaggedUnionPureVirtualFunctionIdentifier = string;
 struct PolymorphicTaggedUnionMetaData
 {
-	set<string> derivedStructIdentifierSet;
 	map<PolymorphicTaggedUnionPureVirtualFunctionIdentifier, 
 	    PolymorphicTaggedUnionPureVirtualFunctionMetaData> virtualFunctions;
+	map<string, 
+		map<PolymorphicTaggedUnionPureVirtualFunctionIdentifier, 
+		    PolymorphicTaggedUnionPureVirtualFunctionOverrideMetaData>> 
+		derivedStructId_to_vFuncOverrides;
 };
 using TaggedUnionStructIdentifier = string;
 static map<TaggedUnionStructIdentifier, PolymorphicTaggedUnionMetaData> 
@@ -125,9 +137,10 @@ static void
 			g_polyTaggedUnions.insert({parentStructId, {}});
 			ptuIt = g_polyTaggedUnions.find(parentStructId);
 		}
-		if(ptuIt->second.derivedStructIdentifierSet.contains(tokenStr))
+		if(ptuIt->second.derivedStructId_to_vFuncOverrides.contains(tokenStr))
 			PARSE_FAILURE();
-		ptuIt->second.derivedStructIdentifierSet.insert(tokenStr);
+		ptuIt->second.derivedStructId_to_vFuncOverrides.insert(tokenStr, {});
+		g_lastPtuExtensionStructId = tokenStr;
 	}
 }
 static void 
@@ -140,13 +153,14 @@ static void
 			KTokenType::PAREN_OPEN)
 		PARSE_FAILURE();
 	/* parse the derived struct identifier */
-	string derivedStructId;
+	string dispatchFunctionId;
 	{
 		const KToken tokenStructId = 
 			kcppRequireToken(tokenizer, KTokenType::IDENTIFIER);
 		if(tokenStructId.type != KTokenType::IDENTIFIER)
 			PARSE_FAILURE();
-		derivedStructId = string(tokenStructId.text, tokenStructId.textLength);
+		dispatchFunctionId = 
+			string(tokenStructId.text, tokenStructId.textLength);
 	}
 	/* parse the closing parenthesis */
 	if(kcppRequireToken(tokenizer, KTokenType::PAREN_CLOSE).type != 
@@ -179,8 +193,92 @@ static void
 	}
 	/* read all the parameter qualifiers for each param (all non-whitespace 
 		tokens between each comma token) */
+	string ownerPtuIdentifier;
+	vector<PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter> 
+		functionParams;
+	PolymorphicTaggedUnionPureVirtualFunctionMetaData::Parameter currParam;
+	for(;;)
+	{
+		const KToken token = ktokeNext(tokenizer);
+		/* accumulate tokens into `currParam` until we hit a COMMA or 
+			PAREN_CLOSE, in which case we can add the current `currParam` into 
+			the function param list, then start accumulating a new param */
+		if(token.type == KTokenType::PAREN_CLOSE 
+			|| token.type == KTokenType::COMMA)
+		{
+			/* before adding the `currParam`, we should eliminate all leading & 
+				trailing WHITESPACE tokens */
+			for(size_t t = 0; t < currParam.qualifierTokens.size(); t++)
+			{
+				if(currParam.qualifierTokens[t].type != KTokenType::WHITESPACE)
+					break;
+				currParam.qualifierTokens.erase(
+					currParam.qualifierTokens.begin() + t);
+				t--;
+			}
+			for(size_t t = currParam.qualifierTokens.size() - 1; 
+				t < currParam.qualifierTokens.size(); t--)
+			{
+				if(currParam.qualifierTokens[t].type != KTokenType::WHITESPACE)
+					break;
+				currParam.qualifierTokens.erase(
+					currParam.qualifierTokens.begin() + t);
+				t++;
+			}
+			/* the parameter's last token is the identifier */
+			currParam.identifier = currParam.qualifierTokens.back().str;
+			/* if there are no non-whitespace tokens, there is no parameter! */
+			if(!currParam.qualifierTokens.empty())
+				functionParams.push_back(currParam);
+			currParam = {};// clear the currParam var for the next parameter
+			if(token.type == KTokenType::PAREN_CLOSE)
+				break;
+		}
+		/* don't add more than one whitespace token in a row, since duplicate 
+			whitespace has no logical meaning */
+		if(!(token.type == KTokenType::WHITESPACE 
+			&& !currParam.qualifierTokens.empty() 
+			&&  currParam.qualifierTokens.back().type == KTokenType::WHITESPACE)
+			/* also, don't add the comma token to params! */
+			&& token.type != KTokenType::COMMA)
+		{
+			currParam.qualifierTokens.push_back(
+				{ .type = token.type
+				, .str  = string(token.text, token.textLength)});
+		}
+	}
+	/* functions are REQUIRED to have a pointer to the PTU struct as the first 
+		parameter! (this pointer) */
+	assert(!functionParams.empty());
+	ownerPtuIdentifier = functionParams.front().qualifierTokens.front().str;
+	assert(!ownerPtuIdentifier.empty());
 	/* store all these tokens as a single data structure in some data set inside 
 		g_polyTaggedUnions */
+	{
+		/* first we have to make sure the owner PTU exists in the PTU database, 
+			because we don't know what order the source files will be parsed 
+			in! */
+		auto ptuIt = g_polyTaggedUnions.find(ownerPtuIdentifier);
+		if(ptuIt == g_polyTaggedUnions.end())
+		{
+			auto insertionResultPair = 
+				g_polyTaggedUnions.insert({ownerPtuIdentifier, {}});
+			assert(insertionResultPair.second);
+			ptuIt = insertionResultPair.first;
+		}
+		/* add the data of this PTU pure virtual override function to the 
+			derivedStructId_to_vFuncOverrides member of the PTU in the 
+			database.  This is where we can utilize 
+			g_lastPtuExtensionStructId, and assume this override function 
+			belongs to that struct */
+		auto subPtuIt = ptuIt->second.derivedStructId_to_vFuncOverrides.find(
+			g_lastPtuExtensionStructId);
+		if(subPtuIt == ptuIt->second.derivedStructId_to_vFuncOverrides.end())
+		{
+			assert(!"TODO: add the extension struct id to the PTU's data & ensure the subPtuIt is valid");
+		}
+		assert(!"TODO");
+	}
 	/* then later, when we're generating the dispatch code, we compare all these 
 		tokens with the ones in the declared virtual functions and see if they 
 		match! */
@@ -543,14 +641,12 @@ static void processFileData(const char* fileData)
 				{
 					kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(tokenizer);
 				}
-#if 0
 				if(ktokeEquals(
 					token, 
 					"KCPP_POLYMORPHIC_TAGGED_UNION_PURE_VIRTUAL_OVERRIDE"))
 				{
 					kcppParsePolymorphicTaggedUnionPureVirtualFunctionOverride(tokenizer);
 				}
-#endif
 #if KASSET_IMPLEMENTATION
 				if(ktokeEquals(token, "INCLUDE_KASSET"))
 				{
@@ -885,36 +981,6 @@ static string
 	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 	return str;
 }
-#if 0
-/* extract the string of the identifier of the FIRST parameter of the PTU 
-	VFMD - this is a required parameter that must be the type of the PTU */
-static string 
-	ptuPvfGetThisParamIdentifier(
-		const PolymorphicTaggedUnionPureVirtualFunctionMetaData& pvfMeta)
-{
-	/* cases: 
-		- no params (ILLEGAL??)
-		- only one param
-		- multiple params */
-	string lastNonWhitespaceToken = "UNKNOWN";
-	for(size_t i = 0; i < pvfMeta.paramTokens.size(); i++)
-	{
-		const StringToken& token = pvfMeta.paramTokens[i];
-		if(token.type == KTokenType::COMMA)
-		{
-			assert(lastNonWhitespaceToken != "UNKNOWN");
-			return lastNonWhitespaceToken;
-		}
-		if(token.type != KTokenType::WHITESPACE)
-		{
-			lastNonWhitespaceToken = token.str;
-			continue;
-		}
-	}
-	assert(lastNonWhitespaceToken != "UNKNOWN");
-	return lastNonWhitespaceToken;
-}
-#endif
 static string 
 	generatePolymorphicTaggedUnionDispatch(
 		const string& ptuIdentifier, 
