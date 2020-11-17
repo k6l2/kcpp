@@ -139,7 +139,7 @@ static void
 		}
 		if(ptuIt->second.derivedStructId_to_vFuncOverrides.contains(tokenStr))
 			PARSE_FAILURE();
-		ptuIt->second.derivedStructId_to_vFuncOverrides.insert(tokenStr, {});
+		ptuIt->second.derivedStructId_to_vFuncOverrides.insert({tokenStr, {}});
 		g_lastPtuExtensionStructId = tokenStr;
 	}
 }
@@ -275,14 +275,22 @@ static void
 			g_lastPtuExtensionStructId);
 		if(subPtuIt == ptuIt->second.derivedStructId_to_vFuncOverrides.end())
 		{
-			assert(!"TODO: add the extension struct id to the PTU's data & ensure the subPtuIt is valid");
+			auto insertionResultPair = 
+				ptuIt->second.derivedStructId_to_vFuncOverrides.insert(
+					{g_lastPtuExtensionStructId, {}});
+			assert(insertionResultPair.second);
+			subPtuIt = insertionResultPair.first;
 		}
-		assert(!"TODO");
+		/* add the functionIdentifier to vFuncOverrides database, ensuring that 
+			it only ever gets added ONCE */
+		auto vFuncOverrideIt = subPtuIt->second.find(functionIdentifier);
+		assert(vFuncOverrideIt == subPtuIt->second.end());
+		PolymorphicTaggedUnionPureVirtualFunctionOverrideMetaData vFuncOverride;
+		vFuncOverride.superFunctionIdentifier          = dispatchFunctionId;
+		vFuncOverride.functionMetaData.params          = functionParams;
+		vFuncOverride.functionMetaData.qualifierTokens = functionQualifiers;
+		subPtuIt->second.insert({functionIdentifier, vFuncOverride});
 	}
-	/* then later, when we're generating the dispatch code, we compare all these 
-		tokens with the ones in the declared virtual functions and see if they 
-		match! */
-	assert(!"TODO");
 }
 static void 
 	kcppParsePolymorphicTaggedUnionPureVirtualFunctionDefinition(
@@ -1013,8 +1021,9 @@ static string
 		const string thisParamId = vfIt.second.params.front().identifier;
 		result.append("\tswitch("+thisParamId+"->type)\n");
 		result.append("\t{\n");
-		for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+		for(auto derivedIt : ptuMeta.derivedStructId_to_vFuncOverrides)
 		{
+			const string& ptuDerivedId = derivedIt.first;
 			result.append("\tcase "+ptuIdentifier+"::Type::"+
 			              toUpperCase(ptuDerivedId)+":\n");
 			result.append("\tbreak;\n");
@@ -1031,8 +1040,9 @@ static string
 {
 	string result;
 	result.append("#pragma once\n");
-	for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+	for(auto derivedIt : ptuMeta.derivedStructId_to_vFuncOverrides)
 	{
+		const string& ptuDerivedId = derivedIt.first;
 		string ptuDerivedIdCamelCase = ptuDerivedId;
 		ptuDerivedIdCamelCase[0] = tolower(ptuDerivedId[0]);
 		result.append("#include \"" + ptuDerivedIdCamelCase + ".h\"");
@@ -1049,25 +1059,27 @@ static string
 	result.append("enum class Type : u16\n");
 	result.append("	{ ");
 	bool firstEnum = true;
-	for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+	for(auto derivedIt : ptuMeta.derivedStructId_to_vFuncOverrides)
 	{
+		const string& ptuDerivedId = derivedIt.first;
 		if(!firstEnum)
 			result.append("\n	, ");
 		firstEnum = false;
 		result.append(toUpperCase(ptuDerivedId));
 	}
-	if(!ptuMeta.derivedStructIdentifierSet.empty())
+	if(!ptuMeta.derivedStructId_to_vFuncOverrides.empty())
 		result.append("\n	, ");
 	/* declare a member variable of the struct with this type enum! */
 	result.append("ENUM_COUNT } type;\n");
 	/* generate the union of derived structs */
 	result.append("union\n");
 	result.append("{\n");
-	if(ptuMeta.derivedStructIdentifierSet.empty())
+	if(ptuMeta.derivedStructId_to_vFuncOverrides.empty())
 		result.append("	void* no_derived_structs;\n");
 	else
-		for(const string& ptuDerivedId : ptuMeta.derivedStructIdentifierSet)
+		for(auto derivedIt : ptuMeta.derivedStructId_to_vFuncOverrides)
 		{
+			const string& ptuDerivedId = derivedIt.first;
 			string ptuDerivedIdTitleCase = ptuDerivedId;
 			string ptuDerivedIdCamelCase = ptuDerivedId;
 			ptuDerivedIdTitleCase[0] = toupper(ptuDerivedId[0]);
