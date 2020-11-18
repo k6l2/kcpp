@@ -989,6 +989,36 @@ static string
 	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 	return str;
 }
+/**
+ * @return a list of function identifiers which override `virtualFunctionId`
+ */
+static vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier> 
+	kcppPolymorphicTaggedUnionPureVirtualFunctionGetFunctionOverrides(
+		const PolymorphicTaggedUnionPureVirtualFunctionIdentifier& 
+			virtualFunctionId, 
+		const PolymorphicTaggedUnionPureVirtualFunctionMetaData& 
+			virtualFunctionMeta, 
+		const map<string, 
+			map<PolymorphicTaggedUnionPureVirtualFunctionIdentifier, 
+			    PolymorphicTaggedUnionPureVirtualFunctionOverrideMetaData>>& 
+			derivedStructId_to_vFuncOverrides)
+{
+	vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier> 
+		overrideFunctionIdList;
+	for(auto derivedIt : derivedStructId_to_vFuncOverrides)
+	{
+		for(auto overrideIt : derivedIt.second)
+		{
+			if(overrideIt.second.superFunctionIdentifier == virtualFunctionId)
+				overrideFunctionIdList.push_back(overrideIt.first);
+			/* iterate over all of the vFuncOverrides, and compare all their 
+				function signatures (function qualifiers + param qualifiers) to 
+				verify that they match */
+			// @TODO
+		}
+	}
+	return overrideFunctionIdList;
+}
 static string 
 	generatePolymorphicTaggedUnionDispatch(
 		const string& ptuIdentifier, 
@@ -1026,6 +1056,26 @@ static string
 			const string& ptuDerivedId = derivedIt.first;
 			result.append("\tcase "+ptuIdentifier+"::Type::"+
 			              toUpperCase(ptuDerivedId)+":\n");
+			/* see if there is a function which overrides this function */
+			vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier> 
+					overrideFunctionIds = 
+				kcppPolymorphicTaggedUnionPureVirtualFunctionGetFunctionOverrides(
+					vfIt.first, vfIt.second, 
+					ptuMeta.derivedStructId_to_vFuncOverrides);
+			for(const auto& derivedFunctionId : overrideFunctionIds)
+			{
+				result.append("\t\t"+derivedFunctionId+"(");
+				for(size_t p = 0; p < vfIt.second.params.size(); p++)
+				{
+					const PolymorphicTaggedUnionPureVirtualFunctionMetaData::
+							Parameter& 
+						param = vfIt.second.params[p];
+					if(p > 0)
+						result.append(", ");
+					result.append(param.identifier);
+				}
+				result.append(");\n");
+			}
 			result.append("\tbreak;\n");
 		}
 		result.append("\t}\n");
