@@ -1080,6 +1080,11 @@ static string
 			}
 			result.append("\tbreak;\n");
 		}
+		result.append("\tcase "+ptuIdentifier+"::Type::ENUM_COUNT:\n");
+		result.append("\tdefault:\n");
+		result.append("\t\tKLOG(ERROR, \"Invalid type (%i)!\", "+
+		              thisParamId+"->type);\n");
+		result.append("\tbreak;\n");
 		result.append("\t}\n");
 		result.append("}\n");
 	}
