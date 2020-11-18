@@ -997,7 +997,7 @@ static vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier>
 		const PolymorphicTaggedUnionPureVirtualFunctionIdentifier& 
 			virtualFunctionId, 
 		const PolymorphicTaggedUnionPureVirtualFunctionMetaData& 
-			virtualFunctionMeta, 
+			virtualFunctionMeta, const string& ptuDerivedId, 
 		const map<string, 
 			map<PolymorphicTaggedUnionPureVirtualFunctionIdentifier, 
 			    PolymorphicTaggedUnionPureVirtualFunctionOverrideMetaData>>& 
@@ -1007,6 +1007,8 @@ static vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier>
 		overrideFunctionIdList;
 	for(auto derivedIt : derivedStructId_to_vFuncOverrides)
 	{
+		if(derivedIt.first != ptuDerivedId)
+			continue;
 		for(auto overrideIt : derivedIt.second)
 		{
 			if(overrideIt.second.superFunctionIdentifier == virtualFunctionId)
@@ -1060,7 +1062,7 @@ static string
 			vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier> 
 					overrideFunctionIds = 
 				kcppPolymorphicTaggedUnionPureVirtualFunctionGetFunctionOverrides(
-					vfIt.first, vfIt.second, 
+					vfIt.first, vfIt.second, ptuDerivedId, 
 					ptuMeta.derivedStructId_to_vFuncOverrides);
 			for(const auto& derivedFunctionId : overrideFunctionIds)
 			{
@@ -1095,7 +1097,7 @@ static string
 		const string& ptuDerivedId = derivedIt.first;
 		string ptuDerivedIdCamelCase = ptuDerivedId;
 		ptuDerivedIdCamelCase[0] = tolower(ptuDerivedId[0]);
-		result.append("#include \"" + ptuDerivedIdCamelCase + ".h\"");
+		result.append("#include \"" + ptuDerivedIdCamelCase + ".h\"\n");
 	}
 	return result;
 }
