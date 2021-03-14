@@ -1056,14 +1056,15 @@ static string
 		for(auto derivedIt : ptuMeta.derivedStructId_to_vFuncOverrides)
 		{
 			const string& ptuDerivedId = derivedIt.first;
-			result.append("\tcase "+ptuIdentifier+"::Type::"+
-			              toUpperCase(ptuDerivedId)+":\n");
+			result.append(
+				"\tcase " + ptuIdentifier + "::Type::"
+					+ toUpperCase(ptuDerivedId)+":\n");
 			/* see if there is a function which overrides this function */
 			vector<PolymorphicTaggedUnionPureVirtualFunctionIdentifier> 
 					overrideFunctionIds = 
-				kcppPolymorphicTaggedUnionPureVirtualFunctionGetFunctionOverrides(
-					vfIt.first, vfIt.second, ptuDerivedId, 
-					ptuMeta.derivedStructId_to_vFuncOverrides);
+						kcppPolymorphicTaggedUnionPureVirtualFunctionGetFunctionOverrides(
+							vfIt.first, vfIt.second, ptuDerivedId, 
+							ptuMeta.derivedStructId_to_vFuncOverrides);
 			for(const auto& derivedFunctionId : overrideFunctionIds)
 			{
 				result.append("\t\t"+derivedFunctionId+"(");
@@ -1078,6 +1079,16 @@ static string
 				}
 				result.append(");\n");
 			}
+			/* If there were no functions which override this function, then we 
+				need to report this as an error!  By making this an error at 
+				runtime, we can make PTU interfaces more flexible by allowing 
+				the programmer the ability to choose NOT to override certain 
+				functions */
+			if(overrideFunctionIds.empty())
+				result.append(
+					"\t\tKLOG(ERROR, \"Type(%i) does not override this "
+						"function!\", " 
+					+ thisParamId + "->type);\n");
 			result.append("\tbreak;\n");
 		}
 		result.append("\tcase "+ptuIdentifier+"::Type::ENUM_COUNT:\n");
